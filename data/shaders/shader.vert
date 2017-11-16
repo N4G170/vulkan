@@ -1,26 +1,24 @@
 #version 450
 #extension GL_ARB_separate_shader_objects : enable//needed for vulkan
 
+//in vars
+layout(location = 0) in vec2 position;
+layout(location = 1) in vec3 colour;
+
+layout(binding = 0) uniform UniformBufferObject
+{
+    mat4 model;
+    mat4 view;
+    mat4 projection;
+} objectMatrix;
+
+//out vars
 out gl_PerVertex { vec4 gl_Position; };
 layout(location = 0) out vec3 fragment_colour;
 
 
-vec2 positions[3] = vec2[]
-(
-    vec2(0.0, -0.5),
-    vec2(0.5, 0.5),
-    vec2(-0.5, 0.5)
-);
-
-vec3 colours[3] = vec3[]
-(
-    vec3(1.0, 0.0, 0.0),
-    vec3(0.0, 1.0, 0.0),
-    vec3(0.0, 0.0, 1.0)
-);
-
 void main()
 {
-    gl_Position = vec4(positions[gl_VertexIndex], 0.0, 1.0);
-    fragment_colour = colours[gl_VertexIndex];
+    gl_Position = objectMatrix.projection * objectMatrix.view * objectMatrix.model * vec4(position, 0.0, 1.0);
+    fragment_colour = colour;
 }

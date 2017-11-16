@@ -32,6 +32,8 @@ class VulkanContext
         void Cleanup();
         void DrawFrame();
         void WaitForIdle();
+        void Resize();
+        void UpdateUniformBuffer();
         //</f> /Methods
 
         //<f> Getters/Setters
@@ -85,6 +87,18 @@ class VulkanContext
         VkPipeline m_graphics_pipeline;
 
         std::vector<VkFramebuffer> m_swap_chain_framebuffers;
+        VkBuffer m_vertex_buffer;
+        VkDeviceMemory m_vertex_buffer_memory;
+
+        VkBuffer m_index_buffer;
+        VkDeviceMemory m_index_buffer_memory;
+
+        VkBuffer m_uniform_buffer;
+        VkDeviceMemory m_uniform_buffer_memory;
+
+        VkDescriptorSetLayout m_descriptor_set_layout;
+        VkDescriptorPool m_descriptor_pool;
+        VkDescriptorSet m_descriptor_set;
         //</f> /Rendering
         //<f> Queues
         VkQueue m_graphics_queue;
@@ -151,6 +165,8 @@ class VulkanContext
         VkExtent2D SelectSwapChainExtent(const SwapChainSupportStruct&);
 
         void CreateSwapChain();
+        void RecreateSwapChain();
+        void CleanUpSwapChain();
         //</f> /SwapChains
         //</f> /Devices
 
@@ -166,6 +182,16 @@ class VulkanContext
         void CreateRenderPass();
 
         void CreateFramebuffers();
+        void CreateBuffer(VkDeviceSize, VkBufferUsageFlags, VkMemoryPropertyFlags, VkBuffer&, VkDeviceMemory&);
+        void CreateVertexBuffer();
+        void CreateIndexBuffer();
+        void CreateUniformBuffer();
+        void CopyBuffer(VkBuffer src, VkBuffer dst, VkDeviceSize size);
+        uint32_t FindMemoryType(uint32_t filter_type, VkMemoryPropertyFlags flags);
+
+        void CreateDescriptorSetLayout();
+        void CreateDescriptorPool();
+        void CreateDescriptorSet();
         //</f> /Rendering
 
         //<f> Commands

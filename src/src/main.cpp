@@ -4,6 +4,25 @@
 #include <chrono>
 #include "vulkan_context.hpp"
 
+void OnWindowEvent(const SDL_Event* event, VulkanContext* vulkan_context)
+{
+    if (event->type == SDL_WINDOWEVENT)
+    {
+        switch (event->window.event)
+        {
+            case SDL_WINDOWEVENT_RESIZED:
+                vulkan_context->Resize();
+            break;
+
+            default:
+            // SDL_Log("Window %d got unknown event %d",
+            //         event->window.windowID, event->window.event);
+            break;
+        }
+    }
+}
+
+
 int main(int argc, char* argv[])
 {
     SDL_Window* window{nullptr};
@@ -47,7 +66,7 @@ int main(int argc, char* argv[])
             //Handle events on queue
             while( SDL_PollEvent( &event ) != 0 )
             {
-
+                OnWindowEvent(&event, &vulkan_context);
                 // SDL_Texture* f1 = SDL_CreateTextureFromSurface(renderer.get(), TTF_RenderText_Blended(f, std::u32string("Ups \u00c0 tester"), {255,255,255,255}));
 
                 //TODO:0 send exit code to states
@@ -75,6 +94,7 @@ int main(int argc, char* argv[])
 
             //Variable time step Logic
             // Logic(last_frame_time) Function call
+            vulkan_context.UpdateUniformBuffer();
 
             //Clear screen
             // SDL_SetRenderDrawColor( renderer, 0x00, 0x00, 0x00, 0x00 );

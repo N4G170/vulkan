@@ -9,6 +9,11 @@
 #include <algorithm>
 #include "utils.hpp"
 
+#define GLM_FORCE_RADIANS
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <chrono>
+
 //<f> Constructors & operator=
 VulkanContext::VulkanContext(SDL_Window* window): m_window{window}, m_vulkan_instance{}
 {
@@ -66,34 +71,56 @@ void VulkanContext::Init()
     CreateSwapChain();
     CreateImageViews();
 
+    CreateDescriptorSetLayout();
+    CreateDescriptorPool();
+
     CreateRenderPass();
     CreateGraphicsPipeline();
 
     CreateFramebuffers();
 
     CreateCommandPool();
+    CreateVertexBuffer();
+    CreateIndexBuffer();
+    CreateUniformBuffer();
+    CreateDescriptorSet();//needs uniform buffer
     CreateCommandBuffers();
     CreateSemaphores();
 }
 
 void VulkanContext::Cleanup()
 {
+    CleanUpSwapChain();//needs the command_pool to exist
+
     vkDestroySemaphore(m_logical_device, m_image_available_semaphore, nullptr);
     vkDestroySemaphore(m_logical_device, m_render_finished_semaphore, nullptr);
 
+    // vkFreeCommandBuffers(m_logical_device, m_command_pool, m_command_buffers.size(), m_command_buffers.data());
+
+    // vkFreeDescriptorSets(m_logical_device, m_descriptor_pool, 1, &m_descriptor_set);//no need the pool destruction takes care of it
+    vkDestroyDescriptorPool(m_logical_device, m_descriptor_pool, nullptr);
+    vkDestroyDescriptorSetLayout(m_logical_device, m_descriptor_set_layout, nullptr);
+
+    vkDestroyBuffer(m_logical_device, m_uniform_buffer, nullptr);
+    vkFreeMemory(m_logical_device, m_uniform_buffer_memory, nullptr);
+    vkDestroyBuffer(m_logical_device, m_index_buffer, nullptr);
+    vkFreeMemory(m_logical_device, m_index_buffer_memory, nullptr);
+    vkDestroyBuffer(m_logical_device, m_vertex_buffer, nullptr);
+    vkFreeMemory(m_logical_device, m_vertex_buffer_memory, nullptr);//after destroying the buffer we no longer need the allocated memory
+
     vkDestroyCommandPool(m_logical_device, m_command_pool, nullptr);
 
-    for(auto i{0}; i < m_swap_chain_framebuffers.size(); ++i)
-        vkDestroyFramebuffer(m_logical_device, m_swap_chain_framebuffers[i], nullptr);
-
-    vkDestroyPipeline(m_logical_device, m_graphics_pipeline, nullptr);
-    vkDestroyPipelineLayout(m_logical_device, m_pipeline_layout, nullptr);//the pipeline uses this so it is destroyed after the pipeline
-    vkDestroyRenderPass(m_logical_device, m_render_pass, nullptr);
-
-    for(auto i{0}; i<m_swap_chain_image_views.size(); ++i)
-        vkDestroyImageView(m_logical_device, m_swap_chain_image_views[i], nullptr);
-
-    vkDestroySwapchainKHR(m_logical_device, m_swap_chain, nullptr);
+    // for(auto i{0}; i < m_swap_chain_framebuffers.size(); ++i)
+    //     vkDestroyFramebuffer(m_logical_device, m_swap_chain_framebuffers[i], nullptr);
+    //
+    // vkDestroyPipeline(m_logical_device, m_graphics_pipeline, nullptr);
+    // vkDestroyPipelineLayout(m_logical_device, m_pipeline_layout, nullptr);//the pipeline uses this so it is destroyed after the pipeline
+    // vkDestroyRenderPass(m_logical_device, m_render_pass, nullptr);
+    //
+    // for(auto i{0}; i<m_swap_chain_image_views.size(); ++i)
+    //     vkDestroyImageView(m_logical_device, m_swap_chain_image_views[i], nullptr);
+    //
+    // vkDestroySwapchainKHR(m_logical_device, m_swap_chain, nullptr);
 
     vkDestroyDevice(m_logical_device, nullptr);
 
@@ -107,7 +134,15 @@ void VulkanContext::DrawFrame()
 {
     //get image index from swap chain
     uint32_t image_index{0};
-    vkAcquireNextImageKHR(m_logical_device, m_swap_chain, std::numeric_limits<uint64_t>::max(), m_image_available_semaphore, VK_NULL_HANDLE, &image_index);
+    auto acquire_result{vkAcquireNextImageKHR(m_logical_device, m_swap_chain, std::numeric_limits<uint64_t>::max(), m_image_available_semaphore, VK_NULL_HANDLE, &image_index)};
+
+    if(acquire_result == VK_ERROR_OUT_OF_DATE_KHR)
+    {
+        RecreateSwapChain();
+        return;
+    }
+    else if(acquire_result != VK_SUCCESS && acquire_result != VK_SUBOPTIMAL_KHR)//only these return an image
+        throw std::runtime_error("Failed to acquire swap chain image");
 
     //<f> Submit command
     VkSubmitInfo command_submit_info{};
@@ -143,13 +178,55 @@ void VulkanContext::DrawFrame()
     presentation_info.pSwapchains = swap_chains.data();
     presentation_info.pImageIndices = &image_index;
 
-    vkQueuePresentKHR(m_graphics_queue, &presentation_info);
+    auto queue_result{vkQueuePresentKHR(m_graphics_queue, &presentation_info)};
+
+    if (queue_result == VK_ERROR_OUT_OF_DATE_KHR || queue_result == VK_SUBOPTIMAL_KHR)
+    {
+        RecreateSwapChain();
+    }
+    else if (queue_result != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to present swap chain image!");
+    }
+
+    vkQueueWaitIdle(m_presentation_queue);
     //</f> /Presentation
 }
 
 void VulkanContext::WaitForIdle()
 {
     vkDeviceWaitIdle(m_logical_device);
+}
+
+void VulkanContext::Resize()
+{
+    RecreateSwapChain();
+}
+
+void VulkanContext::UpdateUniformBuffer()
+{
+    static auto start_time{std::chrono::high_resolution_clock::now()};
+
+    auto current_time{std::chrono::high_resolution_clock::now()};
+
+    float time{ std::chrono::duration_cast<std::chrono::milliseconds>(current_time - start_time).count() / 1000.f };
+
+    UniformBufferObject obj{};
+
+    //rotate model 90 degrees * time on z axis
+    obj.model = glm::rotate(glm::mat4{1.0f}, glm::radians(90.f) * time, glm::vec3{0.f, 0.f, 1.f});
+
+    //camera position, point looking at, up vector(what side is up)
+    obj.view = glm::lookAt(glm::vec3{2.f, 2.f, 2.f}, glm::vec3{0.f, 0.f, 0.f}, glm::vec3{0.f, 0.f, 1.f});
+
+    obj.projection = glm::perspective(glm::radians(45.0f), m_swap_chain_extent.width / (float) m_swap_chain_extent.height, 0.1f, 10.0f);//TODO::Study this
+
+    obj.projection[1][1] *= -1;//because opengl inverted clip coordinates
+
+    void* data;
+    vkMapMemory(m_logical_device, m_uniform_buffer_memory, 0, sizeof(obj), 0, &data);
+    memcpy(data, &obj, sizeof(obj));
+    vkUnmapMemory(m_logical_device, m_uniform_buffer_memory);
 }
 //</f> /Methods
 
@@ -656,6 +733,39 @@ void VulkanContext::CreateSwapChain()
     m_swap_chain_images.resize(swap_chain_image_count);
     vkGetSwapchainImagesKHR(m_logical_device, m_swap_chain, &swap_chain_image_count, m_swap_chain_images.data());
 }
+
+void VulkanContext::RecreateSwapChain()
+{
+    //wait for the device to finish what it is doing
+    vkDeviceWaitIdle(m_logical_device);
+
+    //destroy previous swap chain elements
+    CleanUpSwapChain();
+
+    CreateSwapChain();
+    CreateImageViews();
+    CreateRenderPass();
+    CreateGraphicsPipeline();
+    CreateFramebuffers();
+    CreateCommandBuffers();
+}
+
+void VulkanContext::CleanUpSwapChain()
+{
+    vkFreeCommandBuffers(m_logical_device, m_command_pool, m_command_buffers.size(), m_command_buffers.data());
+
+    for(auto i{0}; i < m_swap_chain_framebuffers.size(); ++i)
+        vkDestroyFramebuffer(m_logical_device, m_swap_chain_framebuffers[i], nullptr);
+
+    vkDestroyPipeline(m_logical_device, m_graphics_pipeline, nullptr);
+    vkDestroyPipelineLayout(m_logical_device, m_pipeline_layout, nullptr);//the pipeline uses this so it is destroyed after the pipeline
+    vkDestroyRenderPass(m_logical_device, m_render_pass, nullptr);
+
+    for(auto i{0}; i<m_swap_chain_image_views.size(); ++i)
+        vkDestroyImageView(m_logical_device, m_swap_chain_image_views[i], nullptr);
+
+    vkDestroySwapchainKHR(m_logical_device, m_swap_chain, nullptr);
+}
 //</f> /SwapChains
 //</f> /Devices
 
@@ -751,14 +861,23 @@ void VulkanContext::CreateGraphicsPipeline()
     vertex_input_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
     vertex_input_create_info.pNext = nullptr;
     vertex_input_create_info.flags = 0;
-    vertex_input_create_info.vertexAttributeDescriptionCount = 0;//for now
-    vertex_input_create_info.vertexBindingDescriptionCount = 0;//for now
+
+    auto attribute_description{Vertex::CreateAttributeDescription()};
+    auto binding_description{Vertex::CreateBindingDescrioption()};
+
+    vertex_input_create_info.vertexAttributeDescriptionCount = static_cast<uint32_t>(attribute_description.size());
+    vertex_input_create_info.pVertexAttributeDescriptions = attribute_description.data();
+
+    vertex_input_create_info.vertexBindingDescriptionCount = 1;
+    vertex_input_create_info.pVertexBindingDescriptions = &binding_description;
 
     VkPipelineInputAssemblyStateCreateInfo input_assembly_create_info{};
     input_assembly_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
     input_assembly_create_info.pNext = nullptr;
     input_assembly_create_info.flags = 0;
 
+    // input_assembly_create_info.topology = VK_PRIMITIVE_TOPOLOGY_LINE_STRIP;//TODO:study more of this
+    // input_assembly_create_info.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN;//TODO:study more of this
     input_assembly_create_info.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;//TODO:study more of this
     input_assembly_create_info.primitiveRestartEnable = VK_FALSE;
     //</f> /Vertex Input
@@ -799,7 +918,8 @@ void VulkanContext::CreateGraphicsPipeline()
     rasterizer_create_info.lineWidth = 1.0f;//bigger than 1 needs enabling gpu feature (wideLines)
 
     rasterizer_create_info.cullMode = VK_CULL_MODE_BACK_BIT;
-    rasterizer_create_info.frontFace = VK_FRONT_FACE_CLOCKWISE;//vertex order for faces to be considered front-facing
+    rasterizer_create_info.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;//vertex order for faces to be considered front-facing (counter-clock because of y flip)
+    // rasterizer_create_info.frontFace = VK_FRONT_FACE_CLOCKWISE;//vertex order for faces to be considered front-facing
 
     //alter the depth values by adding a constant value or biasing them based on a fragment's slope
     //can be used for shadow mapping
@@ -856,6 +976,9 @@ void VulkanContext::CreateGraphicsPipeline()
 
     pipeline_layout_create_info.pNext = nullptr;
     pipeline_layout_create_info.flags = 0;
+
+    pipeline_layout_create_info.setLayoutCount = 1;
+    pipeline_layout_create_info.pSetLayouts = &m_descriptor_set_layout;
 
     if(vkCreatePipelineLayout(m_logical_device, &pipeline_layout_create_info, nullptr, &m_pipeline_layout) != VK_SUCCESS)
         throw std::runtime_error("Failed to create pipeline layout");
@@ -1014,6 +1137,251 @@ void VulkanContext::CreateFramebuffers()
             throw std::runtime_error("Failed to create framebuffer");
     }
 }
+
+void VulkanContext::CreateBuffer(VkDeviceSize buffer_size, VkBufferUsageFlags usage_flags, VkMemoryPropertyFlags property_flags, VkBuffer& buffer, VkDeviceMemory& buffer_memory)
+{
+    VkBufferCreateInfo buffer_create_info{};
+    buffer_create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    buffer_create_info.pNext = nullptr;
+    buffer_create_info.flags = 0;
+
+    buffer_create_info.size = buffer_size;
+    buffer_create_info.usage = usage_flags;
+    buffer_create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    if( vkCreateBuffer(m_logical_device, &buffer_create_info, nullptr, &buffer) != VK_SUCCESS )
+        throw std::runtime_error("Failed to create vertex buffer");
+
+    //<f> Memory allocation
+    VkMemoryRequirements buffer_memory_requirements;
+    vkGetBufferMemoryRequirements(m_logical_device, buffer, &buffer_memory_requirements);
+
+    VkMemoryAllocateInfo allocate_info{};
+    allocate_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocate_info.pNext = nullptr;
+
+    allocate_info.allocationSize = buffer_memory_requirements.size;
+    allocate_info.memoryTypeIndex = FindMemoryType(buffer_memory_requirements.memoryTypeBits, property_flags);
+
+    if( vkAllocateMemory(m_logical_device, &allocate_info, nullptr, &buffer_memory) != VK_SUCCESS )
+        throw std::runtime_error("Failed to allocate vertex buffer memory");
+
+    vkBindBufferMemory(m_logical_device, buffer, buffer_memory, 0);
+    //</f> /Memory allocation
+}
+
+void VulkanContext::CreateVertexBuffer()
+{
+    VkDeviceSize buffer_size {sizeof(vertices[0]) * vertices.size()};
+
+    VkBuffer staging_buffer;
+    VkDeviceMemory staging_buffer_memory;
+
+    //Source of memory transfer
+    CreateBuffer(buffer_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                staging_buffer, staging_buffer_memory);
+
+    //<f> Mapping
+    void* data;
+    vkMapMemory(m_logical_device, staging_buffer_memory, 0, buffer_size, 0, &data);
+    memcpy(data, vertices.data(), static_cast<size_t>(buffer_size));
+    vkUnmapMemory(m_logical_device, staging_buffer_memory);
+    //</f> /Mapping
+
+    //destination of memory transfer and vertex buffer and with local device memory
+    CreateBuffer(buffer_size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                m_vertex_buffer, m_vertex_buffer_memory);
+
+    CopyBuffer(staging_buffer, m_vertex_buffer, buffer_size);
+
+    //free staging vars
+    vkDestroyBuffer(m_logical_device, staging_buffer, nullptr);
+    vkFreeMemory(m_logical_device, staging_buffer_memory, nullptr);
+}
+
+void VulkanContext::CreateIndexBuffer()
+{
+    VkDeviceSize buffer_size{sizeof(vertex_indices[0]) * vertex_indices.size()};
+
+    VkBuffer staging_buffer;
+    VkDeviceMemory staging_buffer_memory;
+
+    //Source of memory transfer
+    CreateBuffer(buffer_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                staging_buffer, staging_buffer_memory);
+
+    //<f> Mapping
+    void* data;
+    vkMapMemory(m_logical_device, staging_buffer_memory, 0, buffer_size, 0, &data);
+    memcpy(data, vertex_indices.data(), static_cast<size_t>(buffer_size));
+    vkUnmapMemory(m_logical_device, staging_buffer_memory);
+    //</f> /Mapping
+
+    //destination of memory transfer and vertex buffer and with local device memory
+    CreateBuffer(buffer_size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                m_index_buffer, m_index_buffer_memory);
+
+    CopyBuffer(staging_buffer, m_index_buffer, buffer_size);
+
+    //free staging vars
+    vkDestroyBuffer(m_logical_device, staging_buffer, nullptr);
+    vkFreeMemory(m_logical_device, staging_buffer_memory, nullptr);
+}
+
+void VulkanContext::CreateUniformBuffer()
+{
+    VkDeviceSize buffer_size{sizeof(UniformBufferObject)};
+
+    //Source of memory transfer
+    CreateBuffer(buffer_size, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                m_uniform_buffer, m_uniform_buffer_memory);
+}
+
+void VulkanContext::CopyBuffer(VkBuffer src, VkBuffer dst, VkDeviceSize size)
+{
+    //memory tranfer operations are made using command buffers
+    VkCommandBufferAllocateInfo allocate_cmd_info{};
+    allocate_cmd_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocate_cmd_info.pNext = nullptr;
+
+    allocate_cmd_info.commandPool = m_command_pool;//use "main" command pool
+    allocate_cmd_info.commandBufferCount = 1;//one set of commands
+
+    //create command buffer
+    VkCommandBuffer cmd_buffer;
+    vkAllocateCommandBuffers(m_logical_device, &allocate_cmd_info, &cmd_buffer);//create cmd buffer
+
+    //record command buffer
+    VkCommandBufferBeginInfo begin_info{};
+    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    begin_info.pNext = nullptr;
+    begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    vkBeginCommandBuffer(cmd_buffer, &begin_info);
+
+    //operations
+    VkBufferCopy copy_region{};
+    copy_region.srcOffset = 0;
+    copy_region.dstOffset = 0;
+    copy_region.size = size;
+
+    vkCmdCopyBuffer(cmd_buffer, src, dst, 1, &copy_region);
+
+    //end record
+    vkEndCommandBuffer(cmd_buffer);
+
+    //submit cmd_buffer
+    VkSubmitInfo submit_info{};
+    submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submit_info.pNext = nullptr;
+
+    submit_info.commandBufferCount = 1;
+    submit_info.pCommandBuffers = &cmd_buffer;
+
+    vkQueueSubmit(m_graphics_queue, 1, &submit_info, VK_NULL_HANDLE);//graphics queue can perform transfer operations
+    vkQueueWaitIdle(m_graphics_queue);
+
+    vkFreeCommandBuffers(m_logical_device, m_command_pool, 1, &cmd_buffer);
+}
+
+uint32_t VulkanContext::FindMemoryType(uint32_t type_filter, VkMemoryPropertyFlags flags)
+{
+    VkPhysicalDeviceMemoryProperties memory_properties{};
+    vkGetPhysicalDeviceMemoryProperties(m_physical_device, &memory_properties);
+
+    for(auto i{0}; i < memory_properties.memoryTypeCount; ++i)
+    {
+        if(type_filter & (1 << i))//check if bit at i position in type_filter is 1
+            if((memory_properties.memoryTypes[i].propertyFlags & flags) == flags)//flags exist
+                return i;
+    }
+
+    throw std::runtime_error("Failed to find suitable memory type");
+}
+
+void VulkanContext::CreateDescriptorSetLayout()
+{
+    VkDescriptorSetLayoutBinding descriptor_binding{};
+
+    descriptor_binding.binding = 0;//binding id in the shader
+    descriptor_binding.descriptorCount = 1;
+    descriptor_binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;//we are working with uniform shader field
+    descriptor_binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;//we are working in the vertex shader
+
+    descriptor_binding.pImmutableSamplers = nullptr;//for now
+
+    //create set layout
+    VkDescriptorSetLayoutCreateInfo descriptor_set_creat_info{};
+    descriptor_set_creat_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    descriptor_set_creat_info.pNext = nullptr;
+    descriptor_set_creat_info.flags = 0;
+
+    descriptor_set_creat_info.bindingCount = 1;
+    descriptor_set_creat_info.pBindings = &descriptor_binding;
+
+    if( vkCreateDescriptorSetLayout(m_logical_device, &descriptor_set_creat_info, nullptr, &m_descriptor_set_layout) != VK_SUCCESS)
+        throw std::runtime_error("Failed to create descriptor set layout");
+}
+
+void VulkanContext::CreateDescriptorPool()
+{
+    //pool size
+    VkDescriptorPoolSize pool_size{};
+    pool_size.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    pool_size.descriptorCount = 1;//UniformBufferObject
+
+    //
+    VkDescriptorPoolCreateInfo pool_create_info{};
+    pool_create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    pool_create_info.pNext = nullptr;
+    pool_create_info.flags = 0;
+
+    pool_create_info.poolSizeCount = 1;
+    pool_create_info.pPoolSizes = &pool_size;
+    pool_create_info.maxSets = 1;//max allocated sets
+
+    if( vkCreateDescriptorPool(m_logical_device, &pool_create_info, nullptr, &m_descriptor_pool) != VK_SUCCESS )
+        throw std::runtime_error("Failed to create descriptor pool");
+}
+
+void VulkanContext::CreateDescriptorSet()
+{
+    std::vector<VkDescriptorSetLayout> layouts{m_descriptor_set_layout};
+
+    VkDescriptorSetAllocateInfo allocate_info{};
+    allocate_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    allocate_info.pNext = nullptr;
+
+    allocate_info.descriptorPool = m_descriptor_pool;
+    allocate_info.descriptorSetCount = 1;
+    allocate_info.pSetLayouts = layouts.data();
+
+    if( vkAllocateDescriptorSets(m_logical_device, &allocate_info, &m_descriptor_set) != VK_SUCCESS )
+        throw std::runtime_error("Failed to allocate descriptor set");
+
+    //config descriptor
+    VkDescriptorBufferInfo config{};
+    config.buffer = m_uniform_buffer;
+    config.offset = 0;
+    config.range = sizeof(UniformBufferObject);
+
+    //update set
+    VkWriteDescriptorSet write_descriptor{};
+    write_descriptor.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    write_descriptor.pNext = nullptr;
+
+    write_descriptor.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    write_descriptor.dstBinding = 0;//shader binding index
+    write_descriptor.dstSet = m_descriptor_set;//set to write to
+    write_descriptor.dstArrayElement = 0;//no array == index 0
+
+    write_descriptor.descriptorCount = 1;
+    write_descriptor.pBufferInfo = &config;
+
+    vkUpdateDescriptorSets(m_logical_device, 1, &write_descriptor, 0, nullptr);//write to set or copy to set
+
+}
 //</f> /Rendering
 
 //<f> Commands
@@ -1080,7 +1448,16 @@ void VulkanContext::CreateCommandBuffers()
 
         vkCmdBindPipeline(m_command_buffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphics_pipeline);
 
-        vkCmdDraw(m_command_buffers[i], 18, 1, 0, 0);
+        //vertex buffer input
+        std::vector<VkBuffer> vertex_buffers{m_vertex_buffer};
+        std::vector<VkDeviceSize> offsets{VkDeviceSize{0}};
+
+        vkCmdBindVertexBuffers(m_command_buffers[i], 0, 1, vertex_buffers.data(), offsets.data());
+        vkCmdBindIndexBuffer(m_command_buffers[i], m_index_buffer, 0, VK_INDEX_TYPE_UINT16);//VK_INDEX_TYPE_UINT16 because vertex_indices uses uint16_t
+        vkCmdBindDescriptorSets(m_command_buffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline_layout, 0, 1, &m_descriptor_set, 0, nullptr);
+
+        // vkCmdDraw(m_command_buffers[i], static_cast<uint32_t>(vertices.size()), 1, 0, 0);
+        vkCmdDrawIndexed(m_command_buffers[i], static_cast<uint32_t>(vertex_indices.size()), 1, 0, 0, 0);
 
         vkCmdEndRenderPass(m_command_buffers[i]);
         //</f> /RenderPass
