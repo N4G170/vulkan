@@ -34,6 +34,7 @@ struct Vertex
 {
     glm::vec2 position;
     glm::vec3 colour;
+    glm::vec2 texture_coordinate;
 
     static VkVertexInputBindingDescription CreateBindingDescrioption()
     {
@@ -48,7 +49,7 @@ struct Vertex
 
     static std::vector<VkVertexInputAttributeDescription> CreateAttributeDescription()
     {
-        std::vector<VkVertexInputAttributeDescription> description(2);
+        std::vector<VkVertexInputAttributeDescription> description(3);
 
         //position
         description[0].binding = 0;
@@ -61,6 +62,12 @@ struct Vertex
         description[1].location = 1;
         description[1].format = VK_FORMAT_R32G32B32_SFLOAT;//3 values 32bit single floats
         description[1].offset = offsetof(Vertex, colour);
+
+        //texture coordinate
+        description[2].binding = 0;
+        description[2].location = 2;
+        description[2].format = VK_FORMAT_R32G32_SFLOAT;
+        description[2].offset = offsetof(Vertex, texture_coordinate);
 
         return description;
     }
@@ -86,42 +93,46 @@ const float rightx = 0.5;
 
 const std::vector<Vertex> vertices
 {
-    { {ox          , oy},                   {1.0f, 0.0f, 0.0f} },
-    { {ox + wx     , oy},                   {1.0f, 1.0f, 0.0f} },
-    { {ox + wx + wy, oy + hy},              {1.0f, 1.0f, 1.0f} },
-    { {ox + wx + wy, oy + hy + hx},         {0.0f, 1.0f, 1.0f} },
-    { {ox + wx     , oy + hy + hx + hy},    {0.0f, 0.0f, 1.0f} },
-    { {ox          , oy + hy + hx + hy},    {0.0f, 1.0f, 0.0f} },
-    { {ox - wy     , oy + hy + hx},         {1.0f, 0.0f, 1.0f} },
-    { {ox - wy     , oy + hy},              {1.0f, 1.0f, 1.0f} },
+    // { {ox          , oy},                   {1.0f, 0.0f, 0.0f},         {} },
+    // { {ox + wx     , oy},                   {1.0f, 1.0f, 0.0f},         {} },
+    // { {ox + wx + wy, oy + hy},              {1.0f, 1.0f, 1.0f},         {} },
+    // { {ox + wx + wy, oy + hy + hx},         {0.0f, 1.0f, 1.0f},         {} },
+    // { {ox + wx     , oy + hy + hx + hy},    {0.0f, 0.0f, 1.0f},         {} },
+    // { {ox          , oy + hy + hx + hy},    {0.0f, 1.0f, 0.0f},         {} },
+    // { {ox - wy     , oy + hy + hx},         {1.0f, 0.0f, 1.0f},         {} },
+    // { {ox - wy     , oy + hy},              {1.0f, 1.0f, 1.0f},         {} },
+    //
+    // { {ox + leftx          , oy},                   {1.0f, 0.0f, 0.0f}, {} },
+    // { {ox + wx      + leftx, oy},                   {1.0f, 1.0f, 0.0f}, {} },
+    // { {ox + wx + wy + leftx, oy + hy},              {1.0f, 1.0f, 1.0f}, {} },
+    // { {ox + wx + wy + leftx, oy + hy + hx},         {0.0f, 1.0f, 1.0f}, {} },
+    // { {ox + wx + leftx     , oy + hy + hx + hy},    {0.0f, 0.0f, 1.0f}, {} },
+    // { {ox + leftx          , oy + hy + hx + hy},    {0.0f, 1.0f, 0.0f}, {} },
+    // { {ox - wy + leftx     , oy + hy + hx},         {1.0f, 0.0f, 1.0f}, {} },
+    // { {ox - wy + leftx     , oy + hy},              {1.0f, 1.0f, 1.0f}, {} },
+    //
+    // { {ox + rightx          , oy},                   {1.0f, 0.0f, 0.0f},{} },
+    // { {ox + wx      + rightx, oy},                   {1.0f, 1.0f, 0.0f},{} },
+    // { {ox + wx + wy + rightx, oy + hy},              {1.0f, 1.0f, 1.0f},{} },
+    // { {ox + wx + wy + rightx, oy + hy + hx},         {0.0f, 1.0f, 1.0f},{} },
+    // { {ox + wx + rightx     , oy + hy + hx + hy},    {0.0f, 0.0f, 1.0f},{} },
+    // { {ox + rightx          , oy + hy + hx + hy},    {0.0f, 1.0f, 0.0f},{} },
+    // { {ox - wy + rightx     , oy + hy + hx},         {1.0f, 0.0f, 1.0f},{} },
+    // { {ox - wy + rightx     , oy + hy},              {1.0f, 1.0f, 1.0f},{} }
 
-    { {ox + leftx          , oy},                   {1.0f, 0.0f, 0.0f} },
-    { {ox + wx      + leftx, oy},                   {1.0f, 1.0f, 0.0f} },
-    { {ox + wx + wy + leftx, oy + hy},              {1.0f, 1.0f, 1.0f} },
-    { {ox + wx + wy + leftx, oy + hy + hx},         {0.0f, 1.0f, 1.0f} },
-    { {ox + wx + leftx     , oy + hy + hx + hy},    {0.0f, 0.0f, 1.0f} },
-    { {ox + leftx          , oy + hy + hx + hy},    {0.0f, 1.0f, 0.0f} },
-    { {ox - wy + leftx     , oy + hy + hx},         {1.0f, 0.0f, 1.0f} },
-    { {ox - wy + leftx     , oy + hy},              {1.0f, 1.0f, 1.0f} },
-
-    { {ox + rightx          , oy},                   {1.0f, 0.0f, 0.0f} },
-    { {ox + wx      + rightx, oy},                   {1.0f, 1.0f, 0.0f} },
-    { {ox + wx + wy + rightx, oy + hy},              {1.0f, 1.0f, 1.0f} },
-    { {ox + wx + wy + rightx, oy + hy + hx},         {0.0f, 1.0f, 1.0f} },
-    { {ox + wx + rightx     , oy + hy + hx + hy},    {0.0f, 0.0f, 1.0f} },
-    { {ox + rightx          , oy + hy + hx + hy},    {0.0f, 1.0f, 0.0f} },
-    { {ox - wy + rightx     , oy + hy + hx},         {1.0f, 0.0f, 1.0f} },
-    { {ox - wy + rightx     , oy + hy},              {1.0f, 1.0f, 1.0f} }
-
+    { {-0.5f, -0.5f}, {1.f, 1.f, 1.f}, {0.f, 0.f} },
+    { {0.5, -0.5f}, {1.f, 1.f, 0.f}, {1.f, 0.f} },
+    { {-0.5f, 0.5}, {1.f, 0.f, 0.f}, {0.f, 1.f} },
+    { {0.5, 0.5}, {0.f, 1.f, 0.f}, {1.f, 1.f} }
 };
 
 //uint type depends on max number of vertices and combinations
 const std::vector<uint16_t> vertex_indices
 {
-    0,1,2,2,3,4,4,5,6,6,7,0,0,2,4,4,6,0,
-    8,9,10,8,10,11,8,11,12,8,12,13,8,13,14,8,14,15,
-    // 15,14,13,15,13,8,13,8,12,12,8,9,12,9,11,11,10,9//15,14,13 does not draw anything
-    16,17,20,16,20,21,16,21,22,16,22,23,17,19,20,17,18,19
+    // 0,1,2,2,3,4,4,5,6,6,7,0,0,2,4,4,6,0,
+    // 8,9,10,8,10,11,8,11,12,8,12,13,8,13,14,8,14,15,
+    // 16,17,20,16,20,21,16,21,22,16,22,23,17,19,20,17,18,19
+    0,1,3,0,3,2
 };
 
 #endif//VULKAN_STRUCTS_HPP

@@ -14,8 +14,10 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <chrono>
 
+#include "texture.hpp"
+
 //<f> Constructors & operator=
-VulkanContext::VulkanContext(SDL_Window* window): m_window{window}, m_vulkan_instance{}
+VulkanContext::VulkanContext(SDL_Window* window):m_texture{this}, m_window{window}, m_vulkan_instance{}
 {
 
 }
@@ -25,12 +27,12 @@ VulkanContext::~VulkanContext() noexcept
 
 }
 
-VulkanContext::VulkanContext(const VulkanContext& other)
+VulkanContext::VulkanContext(const VulkanContext& other): m_texture{other.m_texture}
 {
 
 }
 
-VulkanContext::VulkanContext(VulkanContext&& other) noexcept
+VulkanContext::VulkanContext(VulkanContext&& other) noexcept:m_texture{other.m_texture}
 {
 
 }
@@ -62,7 +64,6 @@ void VulkanContext::Init()
     DefaultInitApplicationInfo();
     CreateVulkanInstance();
     CreateSurface();
-
     CreateDebugCallback();
 
     SelectPhysicalDevice();
@@ -71,26 +72,32 @@ void VulkanContext::Init()
     CreateSwapChain();
     CreateImageViews();
 
-    CreateDescriptorSetLayout();
-    CreateDescriptorPool();
-
     CreateRenderPass();
+    CreateDescriptorSetLayout();
     CreateGraphicsPipeline();
 
     CreateFramebuffers();
-
     CreateCommandPool();
+
+    m_texture.LoadTextureFile("data/img.jpg");
+    m_texture.CreateImageView();
+    m_texture.CreateSampler();
+
     CreateVertexBuffer();
     CreateIndexBuffer();
     CreateUniformBuffer();
+    CreateDescriptorPool();
     CreateDescriptorSet();//needs uniform buffer
     CreateCommandBuffers();
     CreateSemaphores();
+
 }
 
 void VulkanContext::Cleanup()
 {
     CleanUpSwapChain();//needs the command_pool to exist
+
+    m_texture.Cleanup();
 
     vkDestroySemaphore(m_logical_device, m_image_available_semaphore, nullptr);
     vkDestroySemaphore(m_logical_device, m_render_finished_semaphore, nullptr);
@@ -214,7 +221,7 @@ void VulkanContext::UpdateUniformBuffer()
     UniformBufferObject obj{};
 
     //rotate model 90 degrees * time on z axis
-    obj.model = glm::rotate(glm::mat4{1.0f}, glm::radians(90.f) * time, glm::vec3{0.f, 0.f, 1.f});
+    obj.model = glm::rotate(glm::mat4{1.0f}, glm::radians(90.f) * time * 0, glm::vec3{0.f, 0.f, 1.f});
 
     //camera position, point looking at, up vector(what side is up)
     obj.view = glm::lookAt(glm::vec3{2.f, 2.f, 2.f}, glm::vec3{0.f, 0.f, 0.f}, glm::vec3{0.f, 0.f, 1.f});
@@ -229,6 +236,315 @@ void VulkanContext::UpdateUniformBuffer()
     vkUnmapMemory(m_logical_device, m_uniform_buffer_memory);
 }
 //</f> /Methods
+
+//<f> Public util methods
+void VulkanContext::CreateBuffer(VkDeviceSize buffer_size, VkBufferUsageFlags usage_flags, VkMemoryPropertyFlags property_flags, VkBuffer& buffer, VkDeviceMemory& buffer_memory)
+{
+    VkBufferCreateInfo buffer_create_info{};
+    buffer_create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    buffer_create_info.pNext = nullptr;
+    buffer_create_info.flags = 0;
+
+    buffer_create_info.size = buffer_size;
+    buffer_create_info.usage = usage_flags;
+    buffer_create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    if( vkCreateBuffer(m_logical_device, &buffer_create_info, nullptr, &buffer) != VK_SUCCESS )
+        throw std::runtime_error("Failed to create vertex buffer");
+
+    //<f> Memory allocation
+    VkMemoryRequirements buffer_memory_requirements;
+    vkGetBufferMemoryRequirements(m_logical_device, buffer, &buffer_memory_requirements);
+
+    VkMemoryAllocateInfo allocate_info{};
+    allocate_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocate_info.pNext = nullptr;
+
+    allocate_info.allocationSize = buffer_memory_requirements.size;
+    allocate_info.memoryTypeIndex = FindMemoryType(buffer_memory_requirements.memoryTypeBits, property_flags);
+
+    if( vkAllocateMemory(m_logical_device, &allocate_info, nullptr, &buffer_memory) != VK_SUCCESS )
+        throw std::runtime_error("Failed to allocate vertex buffer memory");
+
+    vkBindBufferMemory(m_logical_device, buffer, buffer_memory, 0);
+    //</f> /Memory allocation
+}
+
+void VulkanContext::CopyBuffer(VkBuffer src, VkBuffer dst, VkDeviceSize size, VkDeviceSize src_offset = 0, VkDeviceSize dst_offset = 0)
+{
+    //create command buffer
+    VkCommandBuffer cmd_buffer{BeginSingleCommand()};
+
+    //operations
+    VkBufferCopy copy_region{};
+    copy_region.srcOffset = src_offset;
+    copy_region.dstOffset = dst_offset;
+    copy_region.size = size;
+
+    vkCmdCopyBuffer(cmd_buffer, src, dst, 1, &copy_region);
+
+    //end and submit
+    EndSubmitSingleCommand(cmd_buffer);
+}
+
+uint32_t VulkanContext::FindMemoryType(uint32_t type_filter, VkMemoryPropertyFlags flags)
+{
+    VkPhysicalDeviceMemoryProperties memory_properties{};
+    vkGetPhysicalDeviceMemoryProperties(m_physical_device, &memory_properties);
+
+    for(auto i{0}; i < memory_properties.memoryTypeCount; ++i)
+    {
+        if(type_filter & (1 << i))//check if bit at i position in type_filter is 1
+            if((memory_properties.memoryTypes[i].propertyFlags & flags) == flags)//flags exist
+                return i;
+    }
+
+    throw std::runtime_error("Failed to find suitable memory type");
+}
+
+void VulkanContext::CreateImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& image_memory)
+{
+    //<f> Image Object
+    VkImageCreateInfo create_info;
+    create_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    create_info.pNext = nullptr;
+    create_info.flags = 0;
+
+    create_info.imageType = VK_IMAGE_TYPE_2D;
+    create_info.extent.width = width;
+    create_info.extent.height = height;
+    create_info.extent.depth = 1;
+    create_info.mipLevels = 1;
+    create_info.arrayLayers = 1;
+
+    create_info.format = format;
+    create_info.tiling = tiling;
+
+    create_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    create_info.usage = usage;
+    // create_info.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;//we will copy to it(transfer) and use it in shaders to colour the mesh(sampled)
+    create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;//one queue at a time
+    create_info.samples = VK_SAMPLE_COUNT_1_BIT;
+
+    if( vkCreateImage(m_logical_device, &create_info, nullptr, &image) != VK_SUCCESS )
+        throw std::runtime_error("Failed to create texture image");
+    //</f> /Image Object
+
+    //<f> Memory
+    VkMemoryRequirements memory_requirements{};
+    vkGetImageMemoryRequirements(m_logical_device, image, &memory_requirements);
+
+    VkMemoryAllocateInfo allocate_info{};
+    allocate_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocate_info.pNext = nullptr;
+    allocate_info.allocationSize = memory_requirements.size;
+    allocate_info.memoryTypeIndex = FindMemoryType(memory_requirements.memoryTypeBits, properties);
+
+    if( vkAllocateMemory(m_logical_device, &allocate_info, nullptr, &image_memory) != VK_SUCCESS)
+        throw std::runtime_error("Failed to allocate memory for texture image");
+    //</f> /Memory
+
+    vkBindImageMemory(m_logical_device, image, image_memory, 0);
+}
+
+void VulkanContext::ChangeImageLayout(VkImage image, VkFormat format, VkImageLayout old_layout, VkImageLayout new_layout)
+{
+    auto cmd{BeginSingleCommand()};
+
+    VkImageMemoryBarrier barrier{};
+    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    barrier.pNext = nullptr;
+
+    barrier.image = image;
+    barrier.oldLayout = old_layout;
+    barrier.newLayout = new_layout;
+    //set if we are changing queue families ownership (ex: if using VK_SHARING_MODE_EXCLUSIVE)
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+
+    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    barrier.subresourceRange.baseMipLevel = 0;
+    barrier.subresourceRange.levelCount = 1;
+    barrier.subresourceRange.baseArrayLayer = 0;
+    barrier.subresourceRange.layerCount = 1;
+
+    //<f> AccessMasks and Stages
+    //Move this to external function?
+    VkPipelineStageFlags src_stage;
+    VkPipelineStageFlags dst_stage;
+
+    if (old_layout == VK_IMAGE_LAYOUT_UNDEFINED && new_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
+    {
+        barrier.srcAccessMask = 0;
+        barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+
+        src_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+        dst_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    }
+    else if (old_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+    {
+        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+        src_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+        dst_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    }
+    else
+    {
+        throw std::invalid_argument("Unsupported layout transition!");
+    }
+    //</f> /AccessMasks and Stages
+
+    vkCmdPipelineBarrier(cmd, src_stage, dst_stage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+
+    EndSubmitSingleCommand(cmd);
+}
+
+void VulkanContext::CopyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height)
+{
+    auto cmd{BeginSingleCommand()};
+
+    VkBufferImageCopy copy_region{};
+    copy_region.bufferOffset = 0;
+
+    //really bad var name
+    copy_region.bufferRowLength = 0;// \see https://www.khronos.org/registry/vulkan/specs/1.0/man/html/VkBufferImageCopy.html
+    copy_region.bufferImageHeight = 0;// \see https://www.khronos.org/registry/vulkan/specs/1.0/man/html/VkBufferImageCopy.html
+
+    //parts of image to copy
+    copy_region.imageOffset = {0,0,0};//no offset
+    copy_region.imageExtent ={ width, height, 1 };//it is a 3d extent of a 2d extent
+
+    copy_region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;//copy colour
+    copy_region.imageSubresource.baseArrayLayer = 0;//starting layer to copy from
+    copy_region.imageSubresource.mipLevel = 0;//mip level to copy from
+    copy_region.imageSubresource.layerCount = 1;//number of layers to copy
+
+    vkCmdCopyBufferToImage(cmd, buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy_region);
+
+    EndSubmitSingleCommand(cmd);
+}
+
+VkImageView VulkanContext::CreateImageView(VkImage image, VkFormat format)
+{
+    VkImageView view;
+    VkImageViewCreateInfo view_create_info;
+    view_create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    //need these two or driver screams
+    view_create_info.pNext = nullptr;
+    view_create_info.flags = 0;
+
+    view_create_info.image = image;
+    view_create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    view_create_info.format = format;
+
+    //default component colour chanels values
+    view_create_info.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+    view_create_info.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+    view_create_info.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+    view_create_info.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+
+    //what will the image be used for (mipmaps and stuff)
+    view_create_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    view_create_info.subresourceRange.levelCount = 1;
+    view_create_info.subresourceRange.baseMipLevel = 0;
+    view_create_info.subresourceRange.layerCount = 1;
+    view_create_info.subresourceRange.baseArrayLayer = 0;
+
+    //create view
+    if(vkCreateImageView(m_logical_device, &view_create_info, nullptr, &view) != VK_SUCCESS)
+        throw std::runtime_error("Failed to create image view");
+
+    return view;
+}
+
+VkSampler VulkanContext::CreateSampler()
+{
+    VkSampler sampler{};
+    VkSamplerCreateInfo create_info{};
+    create_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    create_info.pNext = nullptr;
+    create_info.flags = 0;
+
+    //magnify and minify interpolation type
+    create_info.magFilter = VK_FILTER_LINEAR;
+    create_info.minFilter = VK_FILTER_LINEAR;
+
+    //address mode, ex: repeat, clamp ...
+    create_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;//X axis
+    create_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;//Y axis
+    create_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;//Z axis
+
+    //anisotropic filter
+    create_info.anisotropyEnable = VK_FALSE;
+    create_info.maxAnisotropy = 1;//1 = disabled, to enable we need to request the feature during logical device creation, if the physical has the capability
+
+    create_info.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;//colour for the areas outside the image content
+
+    //False -> texel coordinates normalized to [0,1)
+    //True -> texel coordinates as [0, width) and [0, height)
+    create_info.unnormalizedCoordinates = VK_FALSE;
+
+    //comapre options
+    create_info.compareEnable = VK_FALSE;//true, mainly used with shadow maps
+    create_info.compareOp = VK_COMPARE_OP_ALWAYS;
+
+    //mipmaps
+    create_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    create_info.mipLodBias = 0.f;
+    create_info.minLod = 0.f;
+    create_info.maxLod = 0.f;
+
+    if( vkCreateSampler(m_logical_device, &create_info, nullptr, &sampler) != VK_SUCCESS )
+        throw std::runtime_error("Failed to create texture sampler");
+
+    return std::move(sampler);
+}
+
+//<f> Commands
+VkCommandBuffer VulkanContext::BeginSingleCommand()
+{
+    VkCommandBufferAllocateInfo allocate_info{};
+    allocate_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocate_info.pNext = nullptr;
+
+    allocate_info.commandPool = m_command_pool;
+    allocate_info.commandBufferCount = 1;
+    allocate_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+
+    VkCommandBuffer cmd;
+    if( vkAllocateCommandBuffers(m_logical_device, &allocate_info, &cmd) != VK_SUCCESS )
+        throw std::runtime_error("Failed to allocate command buffers");
+
+    //begin record
+    VkCommandBufferBeginInfo begin_info{};
+    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    begin_info.pNext = nullptr;
+    begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+    vkBeginCommandBuffer(cmd, &begin_info);
+
+    return cmd;
+}
+
+void VulkanContext::EndSubmitSingleCommand(VkCommandBuffer cmd)
+{
+    if( vkEndCommandBuffer(cmd) != VK_SUCCESS)
+        throw std::runtime_error("Failed to record command buffer");
+
+    VkSubmitInfo submit_info = {};
+    submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submit_info.pNext = nullptr;
+    submit_info.commandBufferCount = 1;
+    submit_info.pCommandBuffers = &cmd;
+
+    vkQueueSubmit(m_graphics_queue, 1, &submit_info, VK_NULL_HANDLE);
+    vkQueueWaitIdle(m_graphics_queue);
+
+    vkFreeCommandBuffers(m_logical_device, m_command_pool, 1, &cmd);
+}
+//</f> /Commands
+//</f> /Public util methods
 
 //<f> Getters/Setters
 void VulkanContext::ApplicationInfo(const VkApplicationInfo& info) { m_application_info = info; }
@@ -783,32 +1099,7 @@ void VulkanContext::CreateImageViews()
     //create each image view, based on an image
     for(auto i{0}; i<m_swap_chain_images.size(); ++i)
     {
-        VkImageViewCreateInfo view_create_info;
-        view_create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        //need these two or driver screams
-        view_create_info.pNext = nullptr;
-        view_create_info.flags = 0;
-
-        view_create_info.image = m_swap_chain_images[i];
-        view_create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        view_create_info.format = m_swap_chain_format;
-
-        //default component colour chanels values
-        view_create_info.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-        view_create_info.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-        view_create_info.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-        view_create_info.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-
-        //what will the image be used for (mipmaps and stuff)
-        view_create_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        view_create_info.subresourceRange.levelCount = 1;
-        view_create_info.subresourceRange.baseMipLevel = 0;
-        view_create_info.subresourceRange.layerCount = 1;
-        view_create_info.subresourceRange.baseArrayLayer = 0;
-
-        //create view
-        if(vkCreateImageView(m_logical_device, &view_create_info, nullptr, &m_swap_chain_image_views[i]) != VK_SUCCESS)
-            throw std::runtime_error("Failed to create image view at index "+std::to_string(i));
+        m_swap_chain_image_views[i] = CreateImageView(m_swap_chain_images[i], m_swap_chain_format);
     }
 }
 
@@ -1138,38 +1429,6 @@ void VulkanContext::CreateFramebuffers()
     }
 }
 
-void VulkanContext::CreateBuffer(VkDeviceSize buffer_size, VkBufferUsageFlags usage_flags, VkMemoryPropertyFlags property_flags, VkBuffer& buffer, VkDeviceMemory& buffer_memory)
-{
-    VkBufferCreateInfo buffer_create_info{};
-    buffer_create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    buffer_create_info.pNext = nullptr;
-    buffer_create_info.flags = 0;
-
-    buffer_create_info.size = buffer_size;
-    buffer_create_info.usage = usage_flags;
-    buffer_create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-    if( vkCreateBuffer(m_logical_device, &buffer_create_info, nullptr, &buffer) != VK_SUCCESS )
-        throw std::runtime_error("Failed to create vertex buffer");
-
-    //<f> Memory allocation
-    VkMemoryRequirements buffer_memory_requirements;
-    vkGetBufferMemoryRequirements(m_logical_device, buffer, &buffer_memory_requirements);
-
-    VkMemoryAllocateInfo allocate_info{};
-    allocate_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    allocate_info.pNext = nullptr;
-
-    allocate_info.allocationSize = buffer_memory_requirements.size;
-    allocate_info.memoryTypeIndex = FindMemoryType(buffer_memory_requirements.memoryTypeBits, property_flags);
-
-    if( vkAllocateMemory(m_logical_device, &allocate_info, nullptr, &buffer_memory) != VK_SUCCESS )
-        throw std::runtime_error("Failed to allocate vertex buffer memory");
-
-    vkBindBufferMemory(m_logical_device, buffer, buffer_memory, 0);
-    //</f> /Memory allocation
-}
-
 void VulkanContext::CreateVertexBuffer()
 {
     VkDeviceSize buffer_size {sizeof(vertices[0]) * vertices.size()};
@@ -1239,77 +1498,29 @@ void VulkanContext::CreateUniformBuffer()
                 m_uniform_buffer, m_uniform_buffer_memory);
 }
 
-void VulkanContext::CopyBuffer(VkBuffer src, VkBuffer dst, VkDeviceSize size)
-{
-    //memory tranfer operations are made using command buffers
-    VkCommandBufferAllocateInfo allocate_cmd_info{};
-    allocate_cmd_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    allocate_cmd_info.pNext = nullptr;
-
-    allocate_cmd_info.commandPool = m_command_pool;//use "main" command pool
-    allocate_cmd_info.commandBufferCount = 1;//one set of commands
-
-    //create command buffer
-    VkCommandBuffer cmd_buffer;
-    vkAllocateCommandBuffers(m_logical_device, &allocate_cmd_info, &cmd_buffer);//create cmd buffer
-
-    //record command buffer
-    VkCommandBufferBeginInfo begin_info{};
-    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    begin_info.pNext = nullptr;
-    begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-    vkBeginCommandBuffer(cmd_buffer, &begin_info);
-
-    //operations
-    VkBufferCopy copy_region{};
-    copy_region.srcOffset = 0;
-    copy_region.dstOffset = 0;
-    copy_region.size = size;
-
-    vkCmdCopyBuffer(cmd_buffer, src, dst, 1, &copy_region);
-
-    //end record
-    vkEndCommandBuffer(cmd_buffer);
-
-    //submit cmd_buffer
-    VkSubmitInfo submit_info{};
-    submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    submit_info.pNext = nullptr;
-
-    submit_info.commandBufferCount = 1;
-    submit_info.pCommandBuffers = &cmd_buffer;
-
-    vkQueueSubmit(m_graphics_queue, 1, &submit_info, VK_NULL_HANDLE);//graphics queue can perform transfer operations
-    vkQueueWaitIdle(m_graphics_queue);
-
-    vkFreeCommandBuffers(m_logical_device, m_command_pool, 1, &cmd_buffer);
-}
-
-uint32_t VulkanContext::FindMemoryType(uint32_t type_filter, VkMemoryPropertyFlags flags)
-{
-    VkPhysicalDeviceMemoryProperties memory_properties{};
-    vkGetPhysicalDeviceMemoryProperties(m_physical_device, &memory_properties);
-
-    for(auto i{0}; i < memory_properties.memoryTypeCount; ++i)
-    {
-        if(type_filter & (1 << i))//check if bit at i position in type_filter is 1
-            if((memory_properties.memoryTypes[i].propertyFlags & flags) == flags)//flags exist
-                return i;
-    }
-
-    throw std::runtime_error("Failed to find suitable memory type");
-}
-
 void VulkanContext::CreateDescriptorSetLayout()
 {
-    VkDescriptorSetLayoutBinding descriptor_binding{};
+    //<f> Vertex descriptor
+    VkDescriptorSetLayoutBinding vertex_descriptor_binding{};
+    vertex_descriptor_binding.binding = 0;//binding id in the shader
+    vertex_descriptor_binding.descriptorCount = 1;
+    vertex_descriptor_binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;//we are working with uniform shader field
+    vertex_descriptor_binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;//we are working in the vertex shader
 
-    descriptor_binding.binding = 0;//binding id in the shader
-    descriptor_binding.descriptorCount = 1;
-    descriptor_binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;//we are working with uniform shader field
-    descriptor_binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;//we are working in the vertex shader
+    vertex_descriptor_binding.pImmutableSamplers = nullptr;//for now
+    //</f> /Vertex descriptor
 
-    descriptor_binding.pImmutableSamplers = nullptr;//for now
+    //<f> Sampler descriptor
+    VkDescriptorSetLayoutBinding sampler_descriptor_binding{};
+    sampler_descriptor_binding.binding = 1;
+    sampler_descriptor_binding.descriptorCount = 1;
+    sampler_descriptor_binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    sampler_descriptor_binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+    sampler_descriptor_binding.pImmutableSamplers = nullptr;
+    //</f> /Sampler descriptor
+
+    std::vector<VkDescriptorSetLayoutBinding> bindings{vertex_descriptor_binding, sampler_descriptor_binding};
 
     //create set layout
     VkDescriptorSetLayoutCreateInfo descriptor_set_creat_info{};
@@ -1317,8 +1528,8 @@ void VulkanContext::CreateDescriptorSetLayout()
     descriptor_set_creat_info.pNext = nullptr;
     descriptor_set_creat_info.flags = 0;
 
-    descriptor_set_creat_info.bindingCount = 1;
-    descriptor_set_creat_info.pBindings = &descriptor_binding;
+    descriptor_set_creat_info.bindingCount = static_cast<uint32_t>(bindings.size());
+    descriptor_set_creat_info.pBindings = bindings.data();
 
     if( vkCreateDescriptorSetLayout(m_logical_device, &descriptor_set_creat_info, nullptr, &m_descriptor_set_layout) != VK_SUCCESS)
         throw std::runtime_error("Failed to create descriptor set layout");
@@ -1327,9 +1538,12 @@ void VulkanContext::CreateDescriptorSetLayout()
 void VulkanContext::CreateDescriptorPool()
 {
     //pool size
-    VkDescriptorPoolSize pool_size{};
-    pool_size.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    pool_size.descriptorCount = 1;//UniformBufferObject
+    std::vector<VkDescriptorPoolSize> pool_sizes(2);
+    pool_sizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    pool_sizes[0].descriptorCount = 1;//UniformBufferObject
+
+    pool_sizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    pool_sizes[1].descriptorCount = 1;//UniformBufferObject
 
     //
     VkDescriptorPoolCreateInfo pool_create_info{};
@@ -1337,8 +1551,8 @@ void VulkanContext::CreateDescriptorPool()
     pool_create_info.pNext = nullptr;
     pool_create_info.flags = 0;
 
-    pool_create_info.poolSizeCount = 1;
-    pool_create_info.pPoolSizes = &pool_size;
+    pool_create_info.poolSizeCount = static_cast<uint32_t>(pool_sizes.size());
+    pool_create_info.pPoolSizes = pool_sizes.data();
     pool_create_info.maxSets = 1;//max allocated sets
 
     if( vkCreateDescriptorPool(m_logical_device, &pool_create_info, nullptr, &m_descriptor_pool) != VK_SUCCESS )
@@ -1347,6 +1561,7 @@ void VulkanContext::CreateDescriptorPool()
 
 void VulkanContext::CreateDescriptorSet()
 {
+    //<f> Create Descriptor set
     std::vector<VkDescriptorSetLayout> layouts{m_descriptor_set_layout};
 
     VkDescriptorSetAllocateInfo allocate_info{};
@@ -1359,28 +1574,52 @@ void VulkanContext::CreateDescriptorSet()
 
     if( vkAllocateDescriptorSets(m_logical_device, &allocate_info, &m_descriptor_set) != VK_SUCCESS )
         throw std::runtime_error("Failed to allocate descriptor set");
+    //</f> /Create Descriptor set
 
-    //config descriptor
-    VkDescriptorBufferInfo config{};
-    config.buffer = m_uniform_buffer;
-    config.offset = 0;
-    config.range = sizeof(UniformBufferObject);
+    //<f> Descriptor data update
+
+    std::vector<VkWriteDescriptorSet> write_descriptor(2);
+
+    //<f> Uniform buffer
+    //config buffer descriptor
+    VkDescriptorBufferInfo buffer_config{};
+    buffer_config.buffer = m_uniform_buffer;
+    buffer_config.offset = 0;
+    buffer_config.range = sizeof(UniformBufferObject);
 
     //update set
-    VkWriteDescriptorSet write_descriptor{};
-    write_descriptor.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    write_descriptor.pNext = nullptr;
+    write_descriptor[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    write_descriptor[0].pNext = nullptr;
 
-    write_descriptor.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    write_descriptor.dstBinding = 0;//shader binding index
-    write_descriptor.dstSet = m_descriptor_set;//set to write to
-    write_descriptor.dstArrayElement = 0;//no array == index 0
+    write_descriptor[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    write_descriptor[0].dstBinding = 0;//shader binding index
+    write_descriptor[0].dstSet = m_descriptor_set;//set to write to
+    write_descriptor[0].dstArrayElement = 0;//no array == index 0
 
-    write_descriptor.descriptorCount = 1;
-    write_descriptor.pBufferInfo = &config;
+    write_descriptor[0].descriptorCount = 1;
+    write_descriptor[0].pBufferInfo = &buffer_config;
+    //</f> /Uniform buffer
 
-    vkUpdateDescriptorSets(m_logical_device, 1, &write_descriptor, 0, nullptr);//write to set or copy to set
+    //<f> Shader sampler
+    VkDescriptorImageInfo sampler_config{};
+    sampler_config.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    sampler_config.imageView = m_image_view;
+    sampler_config.sampler = m_image_sampler;
 
+    write_descriptor[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    write_descriptor[1].pNext = nullptr;
+
+    write_descriptor[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    write_descriptor[1].dstBinding = 1;
+    write_descriptor[1].dstSet = m_descriptor_set;//set to write to
+    write_descriptor[1].dstArrayElement = 0;
+    write_descriptor[1].descriptorCount = 1;
+    write_descriptor[1].pImageInfo = &sampler_config;
+    //</f> /Shader sampler
+
+    vkUpdateDescriptorSets(m_logical_device, static_cast<uint32_t>(write_descriptor.size()), write_descriptor.data(), 0, nullptr);//write to set or copy to set
+
+    //</f> /Descriptor data update
 }
 //</f> /Rendering
 

@@ -7,6 +7,8 @@
 #include <string>
 #include "vulkan_structs.hpp"
 
+#include "texture.hpp"
+
 class VulkanContext
 {
     public:
@@ -36,10 +38,42 @@ class VulkanContext
         void UpdateUniformBuffer();
         //</f> /Methods
 
+        //<f> Public util methods
+        void CreateBuffer(VkDeviceSize, VkBufferUsageFlags, VkMemoryPropertyFlags, VkBuffer&, VkDeviceMemory&);
+        /**
+         * \brief Copy the content of one buffer to another
+         * @param src        source buffer
+         * @param dst        destination buffer
+         * @param size       size of area to copy
+         * @param src_offset source buffer read offset (Default = 0)
+         * @param dst_offset destination buffer write offset (Default = 0)
+         */
+        void CopyBuffer(VkBuffer src, VkBuffer dst, VkDeviceSize size, VkDeviceSize src_offset, VkDeviceSize dst_offset);
+        uint32_t FindMemoryType(uint32_t filter_type, VkMemoryPropertyFlags flags);
+        void CreateImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& image_memory);
+        void ChangeImageLayout(VkImage image, VkFormat format, VkImageLayout old_layout, VkImageLayout new_layout);
+        void CopyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
+        VkImageView CreateImageView(VkImage image, VkFormat format);
+        VkSampler CreateSampler();
+
+        //<f> Commands
+        VkCommandBuffer BeginSingleCommand();
+        void EndSubmitSingleCommand(VkCommandBuffer cmd);
+        //</f> /Commands
+        //</f> /Public util methods
+
         //<f> Getters/Setters
         void ApplicationInfo(const VkApplicationInfo& info);
         VkApplicationInfo ApplicationInfo() const;
+
+        VkDevice* LogicalDevice() { return &m_logical_device; }
         //</f> /Getters/Setters
+
+        VkImage m_image;
+        VkImageView m_image_view;
+        VkDeviceMemory m_image_memory;
+        VkSampler m_image_sampler;
+        Texture m_texture;
 
     protected:
         // vars and stuff
@@ -182,12 +216,9 @@ class VulkanContext
         void CreateRenderPass();
 
         void CreateFramebuffers();
-        void CreateBuffer(VkDeviceSize, VkBufferUsageFlags, VkMemoryPropertyFlags, VkBuffer&, VkDeviceMemory&);
         void CreateVertexBuffer();
         void CreateIndexBuffer();
         void CreateUniformBuffer();
-        void CopyBuffer(VkBuffer src, VkBuffer dst, VkDeviceSize size);
-        uint32_t FindMemoryType(uint32_t filter_type, VkMemoryPropertyFlags flags);
 
         void CreateDescriptorSetLayout();
         void CreateDescriptorPool();

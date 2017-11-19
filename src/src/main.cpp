@@ -3,6 +3,7 @@
 #include "sdl_init.hpp"
 #include <chrono>
 #include "vulkan_context.hpp"
+#include "texture.hpp"
 
 void OnWindowEvent(const SDL_Event* event, VulkanContext* vulkan_context)
 {
@@ -45,6 +46,9 @@ int main(int argc, char* argv[])
         //init vulkan
         VulkanContext vulkan_context{window};
         vulkan_context.Init();
+
+        // Texture texture{&vulkan_context};
+        // texture.LoadTextureFile("data/img.jpg");
 
         bool quit{false};
 
@@ -124,6 +128,7 @@ int main(int argc, char* argv[])
         }// while(!quit)
 
         //terminate vulkan
+        // texture.Cleanup();
         vulkan_context.WaitForIdle();
         vulkan_context.Cleanup();
     }//else run
