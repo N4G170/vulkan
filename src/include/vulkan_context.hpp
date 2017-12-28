@@ -35,7 +35,7 @@ class VulkanContext
         void DrawFrame();
         void WaitForIdle();
         void Resize();
-        void UpdateUniformBuffer();
+        void UpdateUniformBuffer(float delta_time);
         //</f> /Methods
 
         //<f> Public util methods
@@ -53,7 +53,7 @@ class VulkanContext
         void CreateImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& image_memory);
         void ChangeImageLayout(VkImage image, VkFormat format, VkImageLayout old_layout, VkImageLayout new_layout);
         void CopyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
-        VkImageView CreateImageView(VkImage image, VkFormat format);
+        VkImageView CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspect_flags);
         VkSampler CreateSampler();
 
         //<f> Commands
@@ -146,6 +146,10 @@ class VulkanContext
 
         std::vector<VkImage> m_swap_chain_images;
         std::vector<VkImageView> m_swap_chain_image_views;
+
+        VkImage m_depth_image;
+        VkDeviceMemory m_depth_image_memory;
+        VkImageView m_depth_image_view;
         //</f> /SwapChains
 
         //<f> Commands
@@ -201,6 +205,18 @@ class VulkanContext
         void CreateSwapChain();
         void RecreateSwapChain();
         void CleanUpSwapChain();
+        void CreateDepthResources();
+
+        /**
+         * \brief Finds the first supported format from the input vector
+         * @param wanted_formats vector of formats we want, ordered by preference, with index 0 the highest preference
+         * @param tiling        tiling we need
+         * @param features       format features we need
+         * \return  [description]
+         */
+        VkFormat FindCapableFormat(const std::vector<VkFormat>& wanted_formats, VkImageTiling tiling, VkFormatFeatureFlags features);
+        VkFormat FindDepthCapableFormat();
+        bool DepthFormatHasStencil(VkFormat);
         //</f> /SwapChains
         //</f> /Devices
 

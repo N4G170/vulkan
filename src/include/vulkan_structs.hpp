@@ -32,9 +32,10 @@ struct SwapChainSupportStruct
 
 struct Vertex
 {
-    glm::vec2 position;
-    glm::vec3 colour;
+    glm::vec3 position;
+    glm::vec3 normal;
     glm::vec2 texture_coordinate;
+    // glm::vec3 colour;
 
     static VkVertexInputBindingDescription CreateBindingDescrioption()
     {
@@ -54,20 +55,26 @@ struct Vertex
         //position
         description[0].binding = 0;
         description[0].location = 0;
-        description[0].format = VK_FORMAT_R32G32_SFLOAT;//two values 32bit single floats
+        description[0].format = VK_FORMAT_R32G32B32_SFLOAT;//3 values 32bit single floats
         description[0].offset = offsetof(Vertex, position);
 
         //colour
         description[1].binding = 0;
         description[1].location = 1;
         description[1].format = VK_FORMAT_R32G32B32_SFLOAT;//3 values 32bit single floats
-        description[1].offset = offsetof(Vertex, colour);
+        description[1].offset = offsetof(Vertex, normal);
 
         //texture coordinate
         description[2].binding = 0;
         description[2].location = 2;
         description[2].format = VK_FORMAT_R32G32_SFLOAT;
         description[2].offset = offsetof(Vertex, texture_coordinate);
+
+        //colour
+        // description[3].binding = 0;
+        // description[3].location = 1;
+        // description[3].format = VK_FORMAT_R32G32B32_SFLOAT;//3 values 32bit single floats
+        // description[3].offset = offsetof(Vertex, colour);
 
         return description;
     }
@@ -91,6 +98,7 @@ const float oy = -0.2439;
 const float leftx = -0.5;
 const float rightx = 0.5;
 
+const float m{2};
 const std::vector<Vertex> vertices
 {
     // { {ox          , oy},                   {1.0f, 0.0f, 0.0f},         {} },
@@ -120,19 +128,42 @@ const std::vector<Vertex> vertices
     // { {ox - wy + rightx     , oy + hy + hx},         {1.0f, 0.0f, 1.0f},{} },
     // { {ox - wy + rightx     , oy + hy},              {1.0f, 1.0f, 1.0f},{} }
 
-    { {-0.5f, -0.5f}, {1.f, 1.f, 1.f}, {0.f, 0.f} },
-    { {0.5, -0.5f}, {1.f, 1.f, 0.f}, {1.f, 0.f} },
-    { {-0.5f, 0.5}, {1.f, 0.f, 0.f}, {0.f, 1.f} },
-    { {0.5, 0.5}, {0.f, 1.f, 0.f}, {1.f, 1.f} }
+    // { {-0.5f, 0.5f,  0.5f},  {1.f, 1.f, 1.f}, {0.f, 0.f} },
+    // { { 0.5f, 0.5f,  0.5f},    {1.f, 1.f, 0.f}, {1.f, 0.f} },
+    // { {-0.5f, 0.5f, -0.5f},    {1.f, 0.f, 0.f}, {0.f, 1.f} },
+    // { { 0.5f, 0.5f, -0.5f},      {0.f, 1.f, 0.f}, {1.f, 1.f} },
+    //
+    // { {-0.5f, -0.5f,  0.5f},  {1.f, 1.f, 1.f}, {0.f, 0.f} },
+    // { { 0.5f, -0.5f,  0.5f},    {1.f, 1.f, 0.f}, {1.f, 0.f} },
+    // { {-0.5f, -0.5f, -0.5f},    {1.f, 0.f, 0.f}, {0.f, 1.f} },
+    // { { 0.5f, -0.5f, -0.5f},      {0.f, 1.f, 0.f}, {1.f, 1.f} }
+    //front
+    {{-0.5f, -0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f}},
+    {{0.5f, -0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}},
+    {{0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}},
+    {{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},
+    //back
+    {{-0.5f, -0.5f, 1.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f}},
+    {{0.5f, -0.5f, 1.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}},
+    {{0.5f, 0.5f, 1.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}},
+    {{-0.5f, 0.5f, 1.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}
 };
 
 //uint type depends on max number of vertices and combinations
-const std::vector<uint16_t> vertex_indices
+const std::vector<uint32_t> vertex_indices
 {
     // 0,1,2,2,3,4,4,5,6,6,7,0,0,2,4,4,6,0,
     // 8,9,10,8,10,11,8,11,12,8,12,13,8,13,14,8,14,15,
     // 16,17,20,16,20,21,16,21,22,16,22,23,17,19,20,17,18,19
-    0,1,3,0,3,2
+
+    0, 1, 2, 2, 3, 0,
+    7,5,4,6,5,7
+
+    // 0,7,4,0,3,7,
+    // 3,7,6,3,6,2,
+    // 1,6,5,1,2,6,
+    // 1,4,5,1,0,4,
+    // 5,6,7,5,7,4
 };
 
 #endif//VULKAN_STRUCTS_HPP

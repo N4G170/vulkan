@@ -23,9 +23,11 @@ void OnWindowEvent(const SDL_Event* event, VulkanContext* vulkan_context)
     }
 }
 
-
+#include "mesh.hpp"
 int main(int argc, char* argv[])
 {
+    Mesh mesh{};
+    mesh.Load("data/tmp/chalet.obj");
     SDL_Window* window{nullptr};
 
     //init SDL subsystems
@@ -98,7 +100,7 @@ int main(int argc, char* argv[])
 
             //Variable time step Logic
             // Logic(last_frame_time) Function call
-            vulkan_context.UpdateUniformBuffer();
+            vulkan_context.UpdateUniformBuffer(last_frame_time);
 
             //Clear screen
             // SDL_SetRenderDrawColor( renderer, 0x00, 0x00, 0x00, 0x00 );

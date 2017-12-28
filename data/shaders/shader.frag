@@ -12,5 +12,5 @@ void main()
 {
     // out_colour = vec4(fragment_colour, 1.0);
     // out_colour = vec4(fragment_texture_coordinate, 0.0, 1.0);
-    out_colour = texture(texture_sampler, fragment_texture_coordinate);
+    out_colour = vec4( fragment_colour * texture(texture_sampler, fragment_texture_coordinate).rgb, 1.0);
 }

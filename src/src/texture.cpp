@@ -70,7 +70,7 @@ void Texture::LoadTextureFile(const std::string& file_path)
     {
         //check if surface has 4 channels
         if(surface->format->BytesPerPixel < 4)
-            surface = SDL_ConvertSurfaceFormat(surface, SDL_PIXELFORMAT_RGBA8888, 0);
+            surface = SDL_ConvertSurfaceFormat(surface, SDL_PIXELFORMAT_ABGR8888, 0);
 
         VkDevice logical_device{*(m_vulkan->LogicalDevice())};
         uint32_t width = surface->w, height = surface->h;
@@ -119,7 +119,7 @@ void Texture::LoadTextureFile(const std::string& file_path)
 
 void Texture::CreateImageView()
 {
-    m_vulkan->m_image_view = m_vulkan->CreateImageView(m_vulkan->m_image, VK_FORMAT_R8G8B8A8_UNORM);
+    m_vulkan->m_image_view = m_vulkan->CreateImageView(m_vulkan->m_image, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_ASPECT_COLOR_BIT);
 }
 
 void Texture::CreateSampler()
