@@ -22,6 +22,7 @@ At this moment the texture has some rendering errors (have yet to find the probl
 
 To build on Linux just use the provided cmake project, but first you must install the dependencies:
 - SDL2
+- SDL2_image
 - vulkan sdk //you need to check what your distro package is
 - glm //for shader related maths
 - cmake //so you can use the cmake files
