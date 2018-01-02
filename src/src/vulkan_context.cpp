@@ -82,9 +82,15 @@ void VulkanContext::Init()
     CreateDepthResources();
     CreateFramebuffers();
 
-    m_texture.LoadTextureFile("data/img.png");
+    // m_texture.LoadTextureFile("data/tmp/chalet.jpg");
+    m_texture.LoadTextureFile("data/texture/test.jpg");
+    // m_texture.LoadTextureFile("data/img.png");
     m_texture.CreateImageView();
     m_texture.CreateSampler();
+
+    // m_mesh.Load("data/tmp/chalet.obj");
+    m_mesh.Load("data/model/test.obj");
+    // m_mesh.Load("data/model/king.obj");
 
     CreateVertexBuffer();
     CreateIndexBuffer();
@@ -219,7 +225,7 @@ void VulkanContext::Resize()
 }
 
 #include <cmath>
-void VulkanContext::UpdateUniformBuffer(float delta_time)
+void VulkanContext::UpdateUniformBuffer(float delta_time, const Control& control)
 {
     static auto start_time{std::chrono::high_resolution_clock::now()};
 
@@ -228,54 +234,45 @@ void VulkanContext::UpdateUniformBuffer(float delta_time)
     float time{ std::chrono::duration_cast<std::chrono::milliseconds>(current_time - start_time).count() / 1000.f };
 
     UniformBufferObject obj{};
+    //
+    static glm::vec3 mpos{-27,-3,-64};//tested using controls
+    // static float st{1};
+    // mpos.z += st;
+    // // std::cout<<mpos.z<<std::endl;
+    // if(mpos.z > 70)
+    //     st = -1;
+    // if(mpos.z < -70)
+    //     st = 1;
 
-    static glm::vec3 mpos{0,0,0};
-    static float st{1};
-    mpos.z += st * delta_time * 5;
-    // std::cout<<mpos.z<<std::endl;
-    if(mpos.z > 8.5)
-        st = -1;
-    if(mpos.z < -0.5)
-        st = 1;
+    // if(control.x)
+    //     mpos.x += control.value;
+    // if(control.y)
+    //     mpos.y += control.value;
+    // if(control.z)
+    //     mpos.z += control.value;
 
 
+    glm::mat4 model{1.0f};
     //rotate model 90 degrees * time on glm::vec3{1.f, 0.f, 0.f} axis
-    glm::mat4 model = glm::rotate(glm::mat4{1.0f}, glm::radians(45.f) * time, glm::vec3{0.f, 1.f, 0.f});
-    // model = glm::translate(model, mpos);
-
+    // glm::mat4 model = glm::rotate(glm::mat4{1.0f}, glm::radians(45.f) * time, glm::vec3{0.f, 1.f, 0.f});
+    model = glm::rotate(model, glm::radians(90.f), glm::vec3{0.f, 1.f, 0.f});
+    model = glm::rotate(model, glm::radians(90.f), glm::vec3{-1.f, 0.f, 0.f});
+    model = glm::translate(model, mpos);
+    model = glm::rotate(model, glm::radians(25.f) * time, glm::vec3{0.f, 0.f, -1.f});
+    //
+    // model = glm::translate(model, {0, 0, -55});
+    // obj.model = glm::mat4{1.0f};
     obj.model = model;
 
-    glm::vec3 front{0.f,0.f,3.f};
-    glm::vec3 pos{0.f, 0.f, -3.f};
-    // static float angle = 0.f;
-    // static float px{0.f};
-    // static float py{0.f};
-    // static float xm{.1f};
-    // static float ym{.1f};
-    // if(px > 2)
-    //     xm = -0.1f;
-    // if(px < -2)
-    //     xm = 0.1f;
-    // if(py > 2)
-    //     ym = -0.1f;
-    // if(py < -2)
-    //     ym = 0.1f;
-    //
-    // px += xm;
-    // py += ym;
-    // std::cout<<px*delta_time<<std::endl;
-    // pos.x = px;
-    // pos.y = py;
-    // angle += 1;
-    //camera position, point looking at, up vector(what side is up)
-    // obj.view = glm::lookAt(glm::vec3{2.f, 2.f, 2.f}, glm::vec3{0.f, 0.f, 0.f}, glm::vec3{0.f, 1.f, 0.f});
-    // obj.view = glm::lookAt(glm::vec3{0.f, 0.f, -2.f}, glm::vec3{0.5f, 0.f, 0.f}, glm::vec3{std::cos(glm::radians(angle)), -std::sin(glm::radians(angle)), 0.f});
-    // obj.view = glm::lookAt(pos, pos + front, glm::vec3{0.f, -1.f, 0.f});
-    obj.view = glm::lookAt(glm::vec3{0.f,0.f,-2.f}, glm::vec3{0.f,0.f,0.f}, glm::vec3{0.f, -1.f, 0.f});
+    glm::vec3 pos{0.f, 1.5f, -3.f};
+    glm::vec3 front{ (glm::normalize(pos) * -1.f)};
 
-    obj.projection = glm::perspective(glm::radians(45.f), m_swap_chain_extent.width / (float) m_swap_chain_extent.height, 0.1f, 10.0f);//TODO::Study this
+    obj.view = glm::lookAt(pos, front, glm::vec3{0.f, -1.f, 0.f});
+    // obj.view = glm::lookAt(glm::vec3{0.f,0.f,-29.f}, glm::vec3{0.f,0.f,0.f}, glm::vec3{0.f, -1.f, 0.f});
 
-    obj.projection[1][1] *= -1;//so we have y going up
+    obj.projection = glm::perspective(glm::radians(45.f), m_swap_chain_extent.width / (float) m_swap_chain_extent.height, 0.1f, 100.0f);
+
+    // obj.projection[1][1] *= -1;//so we have y going up
 
     void* data;
     vkMapMemory(m_logical_device, m_uniform_buffer_memory, 0, sizeof(obj), 0, &data);
@@ -545,8 +542,8 @@ VkSampler VulkanContext::CreateSampler()
     create_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;//Z axis
 
     //anisotropic filter
-    create_info.anisotropyEnable = VK_FALSE;
-    create_info.maxAnisotropy = 1;//1 = disabled, to enable we need to request the feature during logical device creation, if the physical has the capability
+    create_info.anisotropyEnable = VK_TRUE;
+    create_info.maxAnisotropy = 16;//1 = disabled, to enable we need to request the feature during logical device creation, if the physical has the capability
 
     create_info.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;//colour for the areas outside the image content
 
@@ -815,7 +812,7 @@ bool VulkanContext::IsPhysicalDeviceCapable(VkPhysicalDevice device)
 
     bool has_capable_swap_chain{CheckSwapChainSupport(device).SwapChainIsCapable()};
 
-    return  has_required_features_and_properties && has_required_extensions && has_required_queue_families && has_capable_swap_chain;
+    return  has_required_features_and_properties && has_required_extensions && has_required_queue_families && has_capable_swap_chain && device_features.samplerAnisotropy;
 }
 
 bool VulkanContext::CheckPhysicalDeviceExtensionSupport(VkPhysicalDevice device)
@@ -871,6 +868,7 @@ void VulkanContext::CreateLogicalDevice()
 
 
     VkPhysicalDeviceFeatures physical_device_features{};
+    physical_device_features.samplerAnisotropy = VK_TRUE;
 
     //<f> Device Create Info
     VkDeviceCreateInfo device_info{};
@@ -1591,7 +1589,8 @@ void VulkanContext::CreateFramebuffers()
 
 void VulkanContext::CreateVertexBuffer()
 {
-    VkDeviceSize buffer_size {sizeof(vertices[0]) * vertices.size()};
+    // VkDeviceSize buffer_size {sizeof(vertices[0]) * vertices.size()};
+    VkDeviceSize buffer_size {m_mesh.VertexBufferSizeNeeded()};
 
     VkBuffer staging_buffer;
     VkDeviceMemory staging_buffer_memory;
@@ -1603,7 +1602,8 @@ void VulkanContext::CreateVertexBuffer()
     //<f> Mapping
     void* data;
     vkMapMemory(m_logical_device, staging_buffer_memory, 0, buffer_size, 0, &data);
-    memcpy(data, vertices.data(), static_cast<size_t>(buffer_size));
+    memcpy(data, m_mesh.VertexData(), static_cast<size_t>(buffer_size));
+    // memcpy(data, vertices.data(), static_cast<size_t>(buffer_size));
     vkUnmapMemory(m_logical_device, staging_buffer_memory);
     //</f> /Mapping
 
@@ -1621,7 +1621,8 @@ void VulkanContext::CreateVertexBuffer()
 
 void VulkanContext::CreateIndexBuffer()
 {
-    VkDeviceSize buffer_size{sizeof(vertex_indices[0]) * vertex_indices.size()};
+    // VkDeviceSize buffer_size{sizeof(vertex_indices[0]) * vertex_indices.size()};
+    VkDeviceSize buffer_size{m_mesh.IndicesBufferSizeNeeded()};
 
     VkBuffer staging_buffer;
     VkDeviceMemory staging_buffer_memory;
@@ -1633,7 +1634,8 @@ void VulkanContext::CreateIndexBuffer()
     //<f> Mapping
     void* data;
     vkMapMemory(m_logical_device, staging_buffer_memory, 0, buffer_size, 0, &data);
-    memcpy(data, vertex_indices.data(), static_cast<size_t>(buffer_size));
+    memcpy(data, m_mesh.IndicesData(), static_cast<size_t>(buffer_size));
+    // memcpy(data, vertex_indices.data(), static_cast<size_t>(buffer_size));
     vkUnmapMemory(m_logical_device, staging_buffer_memory);
     //</f> /Mapping
 
@@ -1855,11 +1857,11 @@ void VulkanContext::CreateCommandBuffers()
         std::vector<VkDeviceSize> offsets{VkDeviceSize{0}};
 
         vkCmdBindVertexBuffers(m_command_buffers[i], 0, 1, vertex_buffers.data(), offsets.data());
-        vkCmdBindIndexBuffer(m_command_buffers[i], m_index_buffer, 0, VK_INDEX_TYPE_UINT32);
+        vkCmdBindIndexBuffer(m_command_buffers[i], m_index_buffer, 0, VK_INDEX_TYPE_UINT32);//VK_INDEX_TYPE_UINT16 because vertex_indices uses uint16_t
         vkCmdBindDescriptorSets(m_command_buffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline_layout, 0, 1, &m_descriptor_set, 0, nullptr);
 
         // vkCmdDraw(m_command_buffers[i], static_cast<uint32_t>(vertices.size()), 1, 0, 0);
-        vkCmdDrawIndexed(m_command_buffers[i], static_cast<uint32_t>(vertex_indices.size()), 1, 0, 0, 0);
+        vkCmdDrawIndexed(m_command_buffers[i], static_cast<uint32_t>(m_mesh.IndicesVectorSize()), 1, 0, 0, 0);
 
         vkCmdEndRenderPass(m_command_buffers[i]);
         //</f> /RenderPass

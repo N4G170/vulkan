@@ -23,11 +23,8 @@ void OnWindowEvent(const SDL_Event* event, VulkanContext* vulkan_context)
     }
 }
 
-#include "mesh.hpp"
 int main(int argc, char* argv[])
 {
-    Mesh mesh{};
-    mesh.Load("data/tmp/chalet.obj");
     SDL_Window* window{nullptr};
 
     //init SDL subsystems
@@ -62,6 +59,8 @@ int main(int argc, char* argv[])
         float fixed_frame_time {0.03};
         float accumulated_time {0};
 
+        Control control{};
+
         while(!quit)
         {
             auto start_time(std::chrono::high_resolution_clock::now());
@@ -75,6 +74,8 @@ int main(int argc, char* argv[])
                 OnWindowEvent(&event, &vulkan_context);
                 // SDL_Texture* f1 = SDL_CreateTextureFromSurface(renderer.get(), TTF_RenderText_Blended(f, std::u32string("Ups \u00c0 tester"), {255,255,255,255}));
 
+                control.value = 0;
+
                 //TODO:0 send exit code to states
                 //User requests quit
                 if( event.type == SDL_QUIT)
@@ -84,6 +85,13 @@ int main(int argc, char* argv[])
                     switch(event.key.keysym.sym)
                     {
                         case SDLK_ESCAPE: quit = true; break;
+
+                        case SDLK_x : control.x = true; control.y = false; control.z  = false; break;
+                        case SDLK_y : control.x = false; control.y = true; control.z  = false; break;
+                        case SDLK_z : control.x = false; control.y = false; control.z  = true; break;
+
+                        case SDLK_UP: case SDLK_RIGHT: control.value = 1; break;
+                        case SDLK_DOWN: case SDLK_LEFT: control.value = -1; break;
                     }
                 }
 
@@ -100,7 +108,7 @@ int main(int argc, char* argv[])
 
             //Variable time step Logic
             // Logic(last_frame_time) Function call
-            vulkan_context.UpdateUniformBuffer(last_frame_time);
+            vulkan_context.UpdateUniformBuffer(last_frame_time, control);
 
             //Clear screen
             // SDL_SetRenderDrawColor( renderer, 0x00, 0x00, 0x00, 0x00 );

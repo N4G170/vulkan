@@ -87,83 +87,94 @@ struct UniformBufferObject
     glm::mat4 projection;
 };
 
+struct Control
+{
+    bool x{false};
+    bool y{false};
+    bool z{false};
+
+    int value{0};
+
+    Control(): x{false}, y{false}, z{false}, value{0} {}
+};
+
 //Vertices
-const float wx = 0.1136;
-const float wy = 0.08;
-const float hx = 0.202;
-const float hy = 0.1428;
-const float ox = -0.0568;
-const float oy = -0.2439;
-
-const float leftx = -0.5;
-const float rightx = 0.5;
-
-const float m{2};
-const std::vector<Vertex> vertices
-{
-    // { {ox          , oy},                   {1.0f, 0.0f, 0.0f},         {} },
-    // { {ox + wx     , oy},                   {1.0f, 1.0f, 0.0f},         {} },
-    // { {ox + wx + wy, oy + hy},              {1.0f, 1.0f, 1.0f},         {} },
-    // { {ox + wx + wy, oy + hy + hx},         {0.0f, 1.0f, 1.0f},         {} },
-    // { {ox + wx     , oy + hy + hx + hy},    {0.0f, 0.0f, 1.0f},         {} },
-    // { {ox          , oy + hy + hx + hy},    {0.0f, 1.0f, 0.0f},         {} },
-    // { {ox - wy     , oy + hy + hx},         {1.0f, 0.0f, 1.0f},         {} },
-    // { {ox - wy     , oy + hy},              {1.0f, 1.0f, 1.0f},         {} },
-    //
-    // { {ox + leftx          , oy},                   {1.0f, 0.0f, 0.0f}, {} },
-    // { {ox + wx      + leftx, oy},                   {1.0f, 1.0f, 0.0f}, {} },
-    // { {ox + wx + wy + leftx, oy + hy},              {1.0f, 1.0f, 1.0f}, {} },
-    // { {ox + wx + wy + leftx, oy + hy + hx},         {0.0f, 1.0f, 1.0f}, {} },
-    // { {ox + wx + leftx     , oy + hy + hx + hy},    {0.0f, 0.0f, 1.0f}, {} },
-    // { {ox + leftx          , oy + hy + hx + hy},    {0.0f, 1.0f, 0.0f}, {} },
-    // { {ox - wy + leftx     , oy + hy + hx},         {1.0f, 0.0f, 1.0f}, {} },
-    // { {ox - wy + leftx     , oy + hy},              {1.0f, 1.0f, 1.0f}, {} },
-    //
-    // { {ox + rightx          , oy},                   {1.0f, 0.0f, 0.0f},{} },
-    // { {ox + wx      + rightx, oy},                   {1.0f, 1.0f, 0.0f},{} },
-    // { {ox + wx + wy + rightx, oy + hy},              {1.0f, 1.0f, 1.0f},{} },
-    // { {ox + wx + wy + rightx, oy + hy + hx},         {0.0f, 1.0f, 1.0f},{} },
-    // { {ox + wx + rightx     , oy + hy + hx + hy},    {0.0f, 0.0f, 1.0f},{} },
-    // { {ox + rightx          , oy + hy + hx + hy},    {0.0f, 1.0f, 0.0f},{} },
-    // { {ox - wy + rightx     , oy + hy + hx},         {1.0f, 0.0f, 1.0f},{} },
-    // { {ox - wy + rightx     , oy + hy},              {1.0f, 1.0f, 1.0f},{} }
-
-    // { {-0.5f, 0.5f,  0.5f},  {1.f, 1.f, 1.f}, {0.f, 0.f} },
-    // { { 0.5f, 0.5f,  0.5f},    {1.f, 1.f, 0.f}, {1.f, 0.f} },
-    // { {-0.5f, 0.5f, -0.5f},    {1.f, 0.f, 0.f}, {0.f, 1.f} },
-    // { { 0.5f, 0.5f, -0.5f},      {0.f, 1.f, 0.f}, {1.f, 1.f} },
-    //
-    // { {-0.5f, -0.5f,  0.5f},  {1.f, 1.f, 1.f}, {0.f, 0.f} },
-    // { { 0.5f, -0.5f,  0.5f},    {1.f, 1.f, 0.f}, {1.f, 0.f} },
-    // { {-0.5f, -0.5f, -0.5f},    {1.f, 0.f, 0.f}, {0.f, 1.f} },
-    // { { 0.5f, -0.5f, -0.5f},      {0.f, 1.f, 0.f}, {1.f, 1.f} }
-    //front
-    {{-0.5f, -0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f}},
-    {{0.5f, -0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}},
-    {{0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}},
-    {{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},
-    //back
-    {{-0.5f, -0.5f, 1.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f}},
-    {{0.5f, -0.5f, 1.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}},
-    {{0.5f, 0.5f, 1.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}},
-    {{-0.5f, 0.5f, 1.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}
-};
-
-//uint type depends on max number of vertices and combinations
-const std::vector<uint32_t> vertex_indices
-{
-    // 0,1,2,2,3,4,4,5,6,6,7,0,0,2,4,4,6,0,
-    // 8,9,10,8,10,11,8,11,12,8,12,13,8,13,14,8,14,15,
-    // 16,17,20,16,20,21,16,21,22,16,22,23,17,19,20,17,18,19
-
-    0, 1, 2, 2, 3, 0,
-    7,5,4,6,5,7
-
-    // 0,7,4,0,3,7,
-    // 3,7,6,3,6,2,
-    // 1,6,5,1,2,6,
-    // 1,4,5,1,0,4,
-    // 5,6,7,5,7,4
-};
+// const float wx = 0.1136;
+// const float wy = 0.08;
+// const float hx = 0.202;
+// const float hy = 0.1428;
+// const float ox = -0.0568;
+// const float oy = -0.2439;
+//
+// const float leftx = -0.5;
+// const float rightx = 0.5;
+//
+// const float m{2};
+// const std::vector<Vertex> vertices
+// {
+//     // { {ox          , oy},                   {1.0f, 0.0f, 0.0f},         {} },
+//     // { {ox + wx     , oy},                   {1.0f, 1.0f, 0.0f},         {} },
+//     // { {ox + wx + wy, oy + hy},              {1.0f, 1.0f, 1.0f},         {} },
+//     // { {ox + wx + wy, oy + hy + hx},         {0.0f, 1.0f, 1.0f},         {} },
+//     // { {ox + wx     , oy + hy + hx + hy},    {0.0f, 0.0f, 1.0f},         {} },
+//     // { {ox          , oy + hy + hx + hy},    {0.0f, 1.0f, 0.0f},         {} },
+//     // { {ox - wy     , oy + hy + hx},         {1.0f, 0.0f, 1.0f},         {} },
+//     // { {ox - wy     , oy + hy},              {1.0f, 1.0f, 1.0f},         {} },
+//     //
+//     // { {ox + leftx          , oy},                   {1.0f, 0.0f, 0.0f}, {} },
+//     // { {ox + wx      + leftx, oy},                   {1.0f, 1.0f, 0.0f}, {} },
+//     // { {ox + wx + wy + leftx, oy + hy},              {1.0f, 1.0f, 1.0f}, {} },
+//     // { {ox + wx + wy + leftx, oy + hy + hx},         {0.0f, 1.0f, 1.0f}, {} },
+//     // { {ox + wx + leftx     , oy + hy + hx + hy},    {0.0f, 0.0f, 1.0f}, {} },
+//     // { {ox + leftx          , oy + hy + hx + hy},    {0.0f, 1.0f, 0.0f}, {} },
+//     // { {ox - wy + leftx     , oy + hy + hx},         {1.0f, 0.0f, 1.0f}, {} },
+//     // { {ox - wy + leftx     , oy + hy},              {1.0f, 1.0f, 1.0f}, {} },
+//     //
+//     // { {ox + rightx          , oy},                   {1.0f, 0.0f, 0.0f},{} },
+//     // { {ox + wx      + rightx, oy},                   {1.0f, 1.0f, 0.0f},{} },
+//     // { {ox + wx + wy + rightx, oy + hy},              {1.0f, 1.0f, 1.0f},{} },
+//     // { {ox + wx + wy + rightx, oy + hy + hx},         {0.0f, 1.0f, 1.0f},{} },
+//     // { {ox + wx + rightx     , oy + hy + hx + hy},    {0.0f, 0.0f, 1.0f},{} },
+//     // { {ox + rightx          , oy + hy + hx + hy},    {0.0f, 1.0f, 0.0f},{} },
+//     // { {ox - wy + rightx     , oy + hy + hx},         {1.0f, 0.0f, 1.0f},{} },
+//     // { {ox - wy + rightx     , oy + hy},              {1.0f, 1.0f, 1.0f},{} }
+//
+//     // { {-0.5f, 0.5f,  0.5f},  {1.f, 1.f, 1.f}, {0.f, 0.f} },
+//     // { { 0.5f, 0.5f,  0.5f},    {1.f, 1.f, 0.f}, {1.f, 0.f} },
+//     // { {-0.5f, 0.5f, -0.5f},    {1.f, 0.f, 0.f}, {0.f, 1.f} },
+//     // { { 0.5f, 0.5f, -0.5f},      {0.f, 1.f, 0.f}, {1.f, 1.f} },
+//     //
+//     // { {-0.5f, -0.5f,  0.5f},  {1.f, 1.f, 1.f}, {0.f, 0.f} },
+//     // { { 0.5f, -0.5f,  0.5f},    {1.f, 1.f, 0.f}, {1.f, 0.f} },
+//     // { {-0.5f, -0.5f, -0.5f},    {1.f, 0.f, 0.f}, {0.f, 1.f} },
+//     // { { 0.5f, -0.5f, -0.5f},      {0.f, 1.f, 0.f}, {1.f, 1.f} }
+//     //front
+//     {{-0.5f, -0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f}},
+//     {{0.5f, -0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}},
+//     {{0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}},
+//     {{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},
+//     //back
+//     {{-0.5f, -0.5f, 1.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f}},
+//     {{0.5f, -0.5f, 1.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}},
+//     {{0.5f, 0.5f, 1.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}},
+//     {{-0.5f, 0.5f, 1.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}
+// };
+//
+// //uint type depends on max number of vertices and combinations
+// const std::vector<uint32_t> vertex_indices
+// {
+//     // 0,1,2,2,3,4,4,5,6,6,7,0,0,2,4,4,6,0,
+//     // 8,9,10,8,10,11,8,11,12,8,12,13,8,13,14,8,14,15,
+//     // 16,17,20,16,20,21,16,21,22,16,22,23,17,19,20,17,18,19
+//
+//     0, 1, 2, 2, 3, 0,
+//     7,5,4,6,5,7
+//
+//     // 0,7,4,0,3,7,
+//     // 3,7,6,3,6,2,
+//     // 1,6,5,1,2,6,
+//     // 1,4,5,1,0,4,
+//     // 5,6,7,5,7,4
+// };
 
 #endif//VULKAN_STRUCTS_HPP

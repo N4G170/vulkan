@@ -36,7 +36,14 @@ class Mesh
         //</f> /Methods
 
         //<f> Getters/Setters
+        size_t VertexBufferSizeNeeded() const;
+        size_t IndicesBufferSizeNeeded() const;
 
+        Vertex* VertexData();
+        uint32_t* IndicesData();
+
+        size_t VertexVectorSize();
+        size_t IndicesVectorSize();
         //</f> /Getters/Setters
 
     protected:

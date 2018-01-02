@@ -2,6 +2,7 @@
 #extension GL_ARB_separate_shader_objects : enable//needed for vulkan
 
 layout(binding = 1) uniform sampler2D texture_sampler;
+// layout(binding = 2) uniform vec3 ambient_light;
 
 layout(location = 0) in vec3 fragment_colour;
 layout(location = 1) in vec2 fragment_texture_coordinate;

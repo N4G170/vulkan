@@ -25,10 +25,10 @@ list(APPEND HEADER_FILES "${FILES_PATH}camera.hpp")
 list(APPEND HEADER_FILES "${FILES_PATH}mesh.hpp")
 
 #Other folder
-list(APPEND INCLUDE_DIRECTORIES src/other/include)
+list(APPEND INCLUDE_DIRECTORIES src/external/include)
 
-set(FILES_PATH "src/other/src/")#file path from root
+set(FILES_PATH "src/external/src/")#file path from root
 list(APPEND SOURCE_FILES "${FILES_PATH}tiny_obj_loader.cpp")
 
-set(FILES_PATH "src/other/include/")#file path from root
+set(FILES_PATH "src/external/include/")#file path from root
 list(APPEND HEADER_FILES "${FILES_PATH}tiny_obj_loader.h")

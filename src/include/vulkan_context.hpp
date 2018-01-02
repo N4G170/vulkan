@@ -8,6 +8,7 @@
 #include "vulkan_structs.hpp"
 
 #include "texture.hpp"
+#include "mesh.hpp"
 
 class VulkanContext
 {
@@ -35,7 +36,7 @@ class VulkanContext
         void DrawFrame();
         void WaitForIdle();
         void Resize();
-        void UpdateUniformBuffer(float delta_time);
+        void UpdateUniformBuffer(float delta_time, const Control& control);
         //</f> /Methods
 
         //<f> Public util methods
@@ -74,6 +75,7 @@ class VulkanContext
         VkDeviceMemory m_image_memory;
         VkSampler m_image_sampler;
         Texture m_texture;
+        Mesh m_mesh;
 
     protected:
         // vars and stuff
