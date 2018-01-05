@@ -16,13 +16,17 @@ At this moment the texture has some rendering errors (have yet to find the probl
 
 ![Screenshot](img/Screenshot.png)
 
+## Running
+
+You can run the provided builds on linux x64 and windows 64bit. On Linux make sure you have SDL2, SDL2_image and vulkan lib installed.
+
 ## Building
 
 ### Linux
 
 To build on Linux just use the provided cmake project, but first you must install the dependencies:
 - SDL2
-- SDL2_image
+- SDL2_image //image file loading
 - vulkan sdk //you need to check what your distro package is
 - glm //for shader related maths
 - cmake //so you can use the cmake files
@@ -40,8 +44,7 @@ If you want to move the build, copy the folder 'data' and the file 'vulkan' from
 
 ### Windows
 
-The project is on a very early stage, it will suffer many changes and as I am developing it on a Linux box, I've not tried it on windows yet.
-Although I have yet to try it, you can. You just need this code, the vulkan SDK, GLM library and base SDL2. Config your project, link the libs and you should be able to run it (you need the data folder on the same folder as the exe).
+I am playing around with cmake text files so that you can use it on windows more easily, but for now, and if you want to try it anyway, you just need this code, the vulkan SDK, GLM library and base SDL2. Config your project, link the libs and you should be able to run it (you need the data folder on the same folder as the exe and the need dlls (if not on your PATH)). If you only want to run it, just use the provied build.
 
 ## Next
 My current goal is to make a model viewer program where you can modify the scene (eg: add/mode lights, anti-aliasing,...). To get there, I have a lot to learn, and as I now have a basic program that can render models, I'll be reading more documentation and studying [Sascha Willems](https://github.com/SaschaWillems/Vulkan) more complex examples and apply them to my use case.
