@@ -1,5 +1,4 @@
 #include "SDL.h"
-#include "SDL_ttf.h"
 #include "SDL_image.h"
 #include <iostream>
 #include "config.hpp"
@@ -27,12 +26,12 @@ struct SDLDeleters
         SDL_DestroyRenderer(screen_renderer);
     }
 
-    void operator() (TTF_Font* font)
-    {
-        //MessageWriter::Instance()->WriteLineToConsole("Calling destroy for TTF_Font object pointer...");
-        std::cout << "Calling destroy for TTF_Font object pointer... \n";
-        TTF_CloseFont( font );
-    }
+    // void operator() (TTF_Font* font)
+    // {
+    //     //MessageWriter::Instance()->WriteLineToConsole("Calling destroy for TTF_Font object pointer...");
+    //     std::cout << "Calling destroy for TTF_Font object pointer... \n";
+    //     TTF_CloseFont( font );
+    // }
 };
 
 bool InitSDL(SDL_Window*& window, const SDLInitConfig& config = {});

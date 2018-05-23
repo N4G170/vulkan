@@ -1,10 +1,8 @@
 #ifndef MESH_HPP
 #define MESH_HPP
 
-#include "vulkan_structs.hpp"
-#include "texture.hpp"
-#include <vector>
-#include "tiny_obj_loader.h"
+#include "material.hpp"
+#include "vulkan_pointers.hpp"
 #include <string>
 
 class Mesh
@@ -12,47 +10,54 @@ class Mesh
     public:
         //<f> Constructors & operator=
         /** brief Default constructor */
-        Mesh();
+        explicit Mesh(vk::VulkanPointers);
         /** brief Default destructor */
         virtual ~Mesh() noexcept;
 
         /** brief Copy constructor */
-        Mesh(const Mesh& other);
+        Mesh(const Mesh& other) = delete;
         /** brief Move constructor */
         Mesh(Mesh&& other) noexcept;
 
         /** brief Copy operator */
-        Mesh& operator= (const Mesh& other);
+        Mesh& operator= (const Mesh& other) = delete;
         /** brief Move operator */
         Mesh& operator= (Mesh&& other) noexcept;
         //</f> /Constructors & operator=
 
-        //<f> Virtual Methods
-
-        //</f> /Virtual Methods
-
         //<f> Methods
-        void Load(const std::string& path);
+        void Cleanup();
+        void CreateVertexBuffer();
+        void CreateIndexBuffer();
         //</f> /Methods
 
         //<f> Getters/Setters
-        size_t VertexBufferSizeNeeded() const;
-        size_t IndicesBufferSizeNeeded() const;
+        void Name(const std::string& name);
+        std::string Name();
 
-        Vertex* VertexData();
-        uint32_t* IndicesData();
+        void AddVertex(vk::Vertex);
+        void AddIndex(uint32_t);
 
-        size_t VertexVectorSize();
-        size_t IndicesVectorSize();
+        vk::Buffer* VertexBuffer();
+        vk::Buffer* IndexBuffer();
+        uint32_t IndexVectorSize() { return m_indices.size(); }
+
+        Material* MeshMaterial() const;
+        void MeshMaterial(Material*);
         //</f> /Getters/Setters
 
     protected:
-        // vars and stuff
+        vk::VulkanPointers m_vulkan_pointers;
+        std::string m_name;
 
-    private:
-        std::vector<Vertex> m_vertices;
+        // vars and stuff
+        Material* m_material;
+        std::vector<vk::Vertex> m_vertices;
         std::vector<uint32_t> m_indices;
-        Texture* m_texture;
+
+        vk::Buffer m_vertex_buffer;
+        vk::Buffer m_index_buffer;
+    private:
 };
 
 #endif //MESH_HPP

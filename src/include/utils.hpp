@@ -6,5 +6,4 @@
 
 std::vector<char> ReadFile(const std::string& filename);
 
-
 #endif//UTILS_HPP

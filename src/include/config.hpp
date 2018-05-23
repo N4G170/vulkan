@@ -16,7 +16,8 @@ struct SDLInitConfig
     int window_y {SDL_WINDOWPOS_UNDEFINED};
     int window_w {1760};
     int window_h {990};
-    Uint32 window_flags {SDL_WINDOW_SHOWN | SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE};
+    Uint32 window_flags {SDL_WINDOW_SHOWN | SDL_WINDOW_VULKAN};
+    // Uint32 window_flags {SDL_WINDOW_SHOWN | SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE};
     //</f>
 
     //<f> Main Renderer
@@ -34,6 +35,13 @@ struct SDLInitConfig
     //<f> Audio
 
     //</f>
+};
+
+struct Config
+{
+    static Config* instance;
+
+    void Init();
 };
 
 #endif//CONFIG_HPP

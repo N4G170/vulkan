@@ -2,8 +2,6 @@
 
 bool InitSDL(SDL_Window*& window, const SDLInitConfig& config)
 {
-
-
     //Initialize SDL
     int result = SDL_Init( SDL_INIT_VIDEO | SDL_INIT_AUDIO );
     if( result < 0 )

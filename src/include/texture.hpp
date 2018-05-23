@@ -1,64 +1,65 @@
 #ifndef TEXTURE_HPP
 #define TEXTURE_HPP
 
+#include <vulkan/vulkan.h>
+#include "vulkan_pointers.hpp"
 #include <string>
-// #include "vulkan_context.hpp"
-
-class VulkanContext;
+#include <mutex>
 
 class Texture
 {
     public:
         //<f> Constructors & operator=
         /** brief Default constructor */
-        explicit Texture(VulkanContext*);
+        explicit Texture(vk::VulkanPointers);
         /** brief Default destructor */
         virtual ~Texture() noexcept;
 
         /** brief Copy constructor */
-        Texture(const Texture& other);
+        Texture(const Texture& other) = delete;
         /** brief Move constructor */
         Texture(Texture&& other) noexcept;
 
         /** brief Copy operator */
-        Texture& operator= (const Texture& other);
+        Texture& operator= (const Texture& other) = delete;
         /** brief Move operator */
         Texture& operator= (Texture&& other) noexcept;
         //</f> /Constructors & operator=
 
-        //<f> Virtual Methods
-
-        //</f> /Virtual Methods
-
         //<f> Methods
         void Cleanup();
-        void LoadTextureFile(const std::string& file_path);
+        void LoadTexture(SDL_Surface* surface, const std::string& name);
+        void LoadCubemap(SDL_Surface* front, SDL_Surface* back, SDL_Surface* up, SDL_Surface* down, SDL_Surface* right, SDL_Surface* left, const std::string& name);
 
-        void CreateImageView();
         void CreateSampler();
+        void CreateCubemapSampler();
+
+        void CreateVulkanObjects();
         //</f> /Methods
 
         //<f> Getters/Setters
+        std::string Name() const;
+        vk::ImageBuffer* ImageBuffer();
+        VkImageView* ImageView();
+        VkSampler* Sampler();
 
+        VkDescriptorSet* DescriptorSet();
+
+        bool IsCubemap();
         //</f> /Getters/Setters
 
     protected:
+        vk::VulkanPointers m_vulkan_pointers;
+        bool m_vulkan_objects_created;
+        std::string m_name;
         // vars and stuff
+        vk::ImageBuffer m_image;
+        VkImageView m_image_view;
+        VkSampler m_sampler;
 
+        VkDescriptorSet m_sampler_descriptor_set;
+        bool m_is_cubemap;
     private:
-        VulkanContext* m_vulkan;
-
-        // VkImage m_image;
-        // VkImageView m_image_view;
-        // VkDeviceMemory m_image_memory;
-        // VkSampler m_image_sampler;
-
-        //<f> Private Methods
-        /**
-         * \Checks if all needed pointers exist, if not throws a runtime_error
-         */
-        void CheckPointers();
-        //</f> /Private Methods
 };
 
 #endif //TEXTURE_HPP

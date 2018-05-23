@@ -25,19 +25,38 @@ class Camera
         //</f> /Constructors & operator=
 
         //<f> Methods
+        void Init(const glm::vec3& position, const glm::vec3& camera_direction);
         void ZoomIn();
         void ZoomOut();
+
+        void Update();
+
+        void MoveForward(float);
+        void MoveBackward(float);
+        void MoveLeft(float);
+        void MoveRight(float);
+
+        void LookUp(float);
+        void LookDown(float);
+        void LookLeft(float);
+        void LookRight(float);
+
         //</f> /Methods
 
         //<f> Getters/Setters
-        void Position(glm::vec3 position);
+        void Position(const glm::vec3&);
         glm::vec3 Position() const;
 
-        void LookPosition(glm::vec3 look_position);
-        glm::vec3 LookPosition() const;
+        void Rotation(const glm::vec3&);
+        glm::vec3 Rotation() const;
 
-        void UpVector(glm::vec3 up);
-        glm::vec3 UpVector() const;
+        void Direction(const glm::vec3&);
+        glm::vec3 Direction() const;
+
+        void Up(const glm::vec3& up);
+        glm::vec3 Up() const;
+
+        glm::vec3 Cross() const;
 
         void FOVDegrees(float fov);
         float FOVDegrees() const;
@@ -72,8 +91,10 @@ class Camera
 
     private:
         glm::vec3 m_position;
-        glm::vec3 m_look_position;
-        glm::vec3 m_up_vector;
+        glm::vec3 m_direction;
+        glm::vec3 m_direction_cross;
+        glm::vec3 m_rotation;
+        glm::vec3 m_up;
 
         float m_fov_deg;
         float m_min_fov_deg;
@@ -90,9 +111,17 @@ class Camera
             glm::mat4 projection;
         } m_matrices;
 
+        //dirty Flags
+        bool m_update_direction;
+        bool m_update_cross;
+        bool m_update_view;
+        bool m_update_projection;
+
         //<f> Update Methods
         void UpdateView();
         void UpdateProjection();
+        void UpdateCameraDirection();
+        void UpdateCameraDirectionCross();
         //</f> /Update Methods
 };
 
